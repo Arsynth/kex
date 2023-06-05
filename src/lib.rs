@@ -48,24 +48,51 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
+    pub fn current_address(&self) -> usize {
+        self.current_address
+    }
+}
+
+impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
     fn print_last_line(&mut self) {
+        use std::cmp::min;
+
         if !self.text_write.has_data() {
             return;
         }
 
+        let mut addr = self.current_address;
         let bpr = self.config.bytes_per_row;
+        let grouping = self.calc_grouping();
+        let mut tmp = bpr - (addr % bpr);
+
+        while tmp > 0 {
+            // Row remainder
+            let r_rem = addr % bpr;
+            // Group remainder
+            let g_rem = r_rem % grouping;
+
+            let fill_count = min(min(grouping - g_rem, bpr - r_rem), tmp);
+
+            let out_bytes = fill_count;
+
+            let data_str = self.config.fmt.byte.padding_string(out_bytes);
+            _ = self.out.write_all(data_str.as_bytes());
+
+            addr += fill_count;
+
+            let need_newline = fill_count + r_rem >= bpr;
+            let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
+
+            if need_group_sep {
+                _ = self.out.write_all(b" ");
+            }
+
+            tmp -= fill_count;
+        }
+
         let rem = self.current_address % bpr;
         let fill_count = bpr - rem;
-
-        let grouping = self.calc_grouping();
-        let spaces = {
-            let g_rem = rem % grouping;
-            let inc = if g_rem == 0 && rem != 0 { 1 } else { 0 };
-            (rem - g_rem) / grouping + inc
-        };
-
-        let pad = self.config.fmt.byte.padding_string(fill_count) + &" ".repeat(spaces);
-        _ = self.out.write_all(pad.as_bytes());
         _ = self.out.write(b" ");
 
         _ = self
@@ -95,6 +122,8 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
+    /// Accepts bytes chunk. Immediately prints `first` and `second` columns to `out`,
+    /// `third` will printed after `second` column is completely filled, or after finalization.
     pub fn push(&mut self, bytes: &[u8]) -> Result<()> {
         use std::cmp::min;
 
@@ -309,9 +338,9 @@ pub trait AddressFormatting {
 /// Used for bytes formatting (both for `second` and `third` columns)
 pub trait ByteFormatting {
     fn format(&mut self, bytes: &[u8]) -> String;
-    
-    /// For the flexibility purpose (for example, you may need add ANSI color codes to output data), 
-    /// there are no strict checking for printable byte format length. 
+
+    /// For the flexibility purpose (for example, you may need add ANSI color codes to output data),
+    /// there are no strict checking for printable byte format length.
     /// Getting the spacing string with incorrect length will result with inaccurate output
     fn padding_string(&mut self, byte_count: usize) -> String;
 }

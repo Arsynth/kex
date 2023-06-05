@@ -8,11 +8,11 @@ fn main() {
         ByteFormatter::new(),
         CharFormatter::new(),
     );
-    let config = Config::new(fmt, 8, 3, ("<".to_string(), ">".to_string()));
-    let mut _printer = Printer::new(Box::new(stdout()), 0, config);
+    let config = Config::new(fmt, 9, 3, ("<".to_string(), ">".to_string()));
+    let mut printer = Printer::new(Box::new(stdout()), 0, config);
     let mut _printer = Printer::<AddressFormatter, ByteFormatter, CharFormatter>::default_with(Box::new(stdout()), 0);
     
-    let mut printer = Printer::default_fmt_with(Box::new(stdout()), 0);
+    let mut _printer = Printer::default_fmt_with(Box::new(stdout()), 0);
 
     let bytes1 = &[222u8, 173, 190, 239];
     let bytes2 = &[0xfeu8, 0xed, 0xfa];
