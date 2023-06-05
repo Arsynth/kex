@@ -1,47 +1,67 @@
+//! `kex` - library for streamed hex dumping
+
 use ascii::*;
 use std::io::{Read, Result, Write};
 
 pub const DEFAULT_BYTES_PER_ROW: usize = 16;
 
+/// The topmost struct for data output
 pub struct Printer<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
+    /// Where to print data
     out: Box<dyn Write>,
 
-    address: usize,
+    /// Base address to print.
+    current_address: usize,
     config: Config<A, B, T>,
 
     text_write: TextWrite,
-    is_finished: bool,
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
+    /// Customized constructor.
+    /// `out` - place to ouput string.
+    ///
+    /// `start_address` - start address to print.
+    ///
+    /// `config` - formatting configuration.
+    ///
+    /// `Printer` does no assumptions on `start_address` where to start reading data,
+    /// it just recieving data chunks in `push(...)` function, then increments the `start_address`
     pub fn new(
         out: Box<dyn Write>,
-        base_address: usize,
+        start_address: usize,
         config: Config<A, B, T>,
     ) -> Printer<A, B, T> {
         let text_write = TextWrite::new(config.bytes_per_row);
         Printer {
             out,
-            address: base_address,
+            current_address: start_address,
             config,
             text_write,
-            is_finished: false,
         }
     }
 
-    fn finish(&mut self) {
-        if self.is_finished {
+    /// Finalize manually. Prints last unfinished line with paddings. By default it called in `drop()`
+    pub fn finish(mut self) {
+        self.print_last_line();
+    }
+}
+
+impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
+    fn print_last_line(&mut self) {
+        if !self.text_write.has_data() {
             return;
         }
 
         let bpr = self.config.bytes_per_row;
-        let rem = self.address % bpr;
+        let rem = self.current_address % bpr;
         let fill_count = bpr - rem;
 
         let grouping = self.calc_grouping();
         let spaces = {
             let g_rem = rem % grouping;
-            (rem - g_rem) / grouping
+            let inc = if g_rem == 0 && rem != 0 { 1 } else { 0 };
+            (rem - g_rem) / grouping + inc
         };
 
         let pad = self.config.fmt.byte.padding_string(fill_count) + &" ".repeat(spaces);
@@ -87,9 +107,8 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 
         let bpr = self.config.bytes_per_row;
 
-
         while tmp.len() > 0 {
-            let addr = self.address;
+            let addr = self.current_address;
             // Row remainder
             let r_rem = addr % bpr;
             // Group remainder
@@ -99,7 +118,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 
             // Check if we need to print address
             if r_rem == 0 {
-                let addr_str = addr_fmt.format(self.address);
+                let addr_str = addr_fmt.format(self.current_address);
                 self.out.write_all(addr_str.as_bytes())?;
 
                 self.out.write_all(b" ")?;
@@ -110,7 +129,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
             let data_str = byte_fmt.format(out_bytes);
             self.out.write_all(data_str.as_bytes())?;
 
-            self.address += fill_count;
+            self.current_address += fill_count;
 
             let need_newline = fill_count + r_rem >= bpr;
             let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
@@ -138,12 +157,34 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
     }
 }
 
-impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Drop for Printer<A, B, T> {
-    fn drop(&mut self) {
-        self.finish()
+impl<A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatting + Default>
+    Printer<A, B, T>
+{
+    pub fn default_with(out: Box<dyn Write>, start_address: usize) -> Printer<A, B, T> {
+        Self::new(out, start_address, Config::<A, B, T>::default())
     }
 }
 
+impl Printer<AddressFormatter, ByteFormatter, CharFormatter> {
+    pub fn default_fmt_with(
+        out: Box<dyn Write>,
+        start_address: usize,
+    ) -> Printer<AddressFormatter, ByteFormatter, CharFormatter> {
+        Self::new(
+            out,
+            start_address,
+            Config::<AddressFormatter, ByteFormatter, CharFormatter>::default(),
+        )
+    }
+}
+
+impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Drop for Printer<A, B, T> {
+    fn drop(&mut self) {
+        self.print_last_line();
+    }
+}
+
+/// Configuration of formatting
 pub struct Config<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     fmt: Formatters<A, B, T>,
 
@@ -177,6 +218,21 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Config<A, B, T>
     }
 }
 
+impl<A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatting + Default>
+    Default for Config<A, B, T>
+{
+    fn default() -> Config<A, B, T> {
+        let fmt: Formatters<A, B, T> = Formatters::new(A::default(), B::default(), T::default());
+        Self {
+            fmt,
+            bytes_per_row: 16,
+            byte_grouping: 4,
+            third_column_sep: ("|".to_string(), "|".to_string()),
+        }
+    }
+}
+
+/// Formatters for address (first column), bytes (second column), and text (third column)
 pub struct Formatters<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     addr: A,
     byte: B,
@@ -239,17 +295,28 @@ impl TextWrite {
 
         Ok(())
     }
+
+    fn has_data(&self) -> bool {
+        self.avail != 0
+    }
 }
 
+/// Used for address formatting (`first` column)
 pub trait AddressFormatting {
     fn format(&self, addr: usize) -> String;
 }
 
+/// Used for bytes formatting (both for `second` and `third` columns)
 pub trait ByteFormatting {
     fn format(&mut self, bytes: &[u8]) -> String;
+    
+    /// For the flexibility purpose (for example, you may need add ANSI color codes to output data), 
+    /// there are no strict checking for printable byte format length. 
+    /// Getting the spacing string with incorrect length will result with inaccurate output
     fn padding_string(&mut self, byte_count: usize) -> String;
 }
 
+/// Builtin address formatter
 pub struct AddressFormatter {
     min_width: usize,
 }
@@ -260,16 +327,29 @@ impl AddressFormatter {
     }
 }
 
+impl Default for AddressFormatter {
+    fn default() -> Self {
+        Self { min_width: 8 }
+    }
+}
+
 impl AddressFormatting for AddressFormatter {
     fn format(&self, addr: usize) -> String {
         format!("{:0width$x}", addr, width = self.min_width)
     }
 }
 
+/// Builtin byte formatter (used for `second` column by default)
 pub struct ByteFormatter {}
 
 impl ByteFormatter {
     pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for ByteFormatter {
+    fn default() -> Self {
         Self {}
     }
 }
@@ -281,14 +361,21 @@ impl ByteFormatting for ByteFormatter {
     }
 
     fn padding_string(&mut self, byte_count: usize) -> String {
-        "  ".repeat(byte_count)
+        "..".repeat(byte_count)
     }
 }
 
+/// Builtin byte formatter (used for `third` column by default)
 pub struct CharFormatter {}
 
 impl CharFormatter {
     pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for CharFormatter {
+    fn default() -> Self {
         Self {}
     }
 }
