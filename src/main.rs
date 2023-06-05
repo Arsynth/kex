@@ -9,7 +9,7 @@ fn main() {
         CharFormatter::new(),
     );
 
-    let config = Config::new(fmt, 8, 4, ("<".to_string(), ">".to_string()));
+    let config = Config::new(fmt, 8, 3, ("<".to_string(), ">".to_string()));
 
     let mut printer = Printer::new(Box::new(stdout()), 0, config);
 
@@ -19,9 +19,9 @@ fn main() {
         0x49u8, 0x74, 0x20, 0x77, 0x6f, 0x72, 0x6b, 0x73, 0x21, 0x21, 0x21,
     ];
 
-    for _ in 0..10 {
-        _ = printer.push(bytes1);
-    }
+    // for _ in 0..10 {
+    //     _ = printer.push(bytes1);
+    // }
 
     _ = printer.push(it_works);
 

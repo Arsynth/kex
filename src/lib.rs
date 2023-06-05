@@ -38,7 +38,13 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
         let rem = self.address % bpr;
         let fill_count = bpr - rem;
 
-        let pad = self.config.fmt.byte.padding_string(fill_count);
+        let grouping = self.calc_grouping();
+        let spaces = {
+            let g_rem = rem % grouping;
+            (rem - g_rem) / grouping
+        };
+
+        let pad = self.config.fmt.byte.padding_string(fill_count) + &" ".repeat(spaces);
         _ = self.out.write_all(pad.as_bytes());
         _ = self.out.write(b" ");
 
@@ -48,6 +54,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
         _ = self
             .text_write
             .flush(&mut self.out, &mut self.config.fmt.text);
+
         let pad = self.config.fmt.text.padding_string(fill_count);
         _ = self.out.write_all(pad.as_bytes());
         _ = self
@@ -56,12 +63,22 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 
         let _ = self.out.write(b"\n");
     }
+
+    fn calc_grouping(&self) -> usize {
+        let grouping = if self.config.byte_grouping > 0 {
+            self.config.byte_grouping
+        } else {
+            self.config.bytes_per_row
+        };
+        grouping
+    }
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T> {
     pub fn push(&mut self, bytes: &[u8]) -> Result<()> {
         use std::cmp::min;
 
+        let grouping = self.calc_grouping();
         let addr_fmt = &mut self.config.fmt.addr;
         let byte_fmt = &mut self.config.fmt.byte;
         let txt_fmt = &mut self.config.fmt.text;
@@ -70,14 +87,18 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 
         let bpr = self.config.bytes_per_row;
 
+
         while tmp.len() > 0 {
             let addr = self.address;
+            // Row remainder
+            let r_rem = addr % bpr;
+            // Group remainder
+            let g_rem = r_rem % grouping;
 
-            let rem = addr % bpr;
+            let fill_count = min(min(grouping - g_rem, bpr - r_rem), tmp.len());
 
-            let fill_count = min(bpr - rem, tmp.len());
-
-            if rem == 0 {
+            // Check if we need to print address
+            if r_rem == 0 {
                 let addr_str = addr_fmt.format(self.address);
                 self.out.write_all(addr_str.as_bytes())?;
 
@@ -91,12 +112,15 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<A, B, T
 
             self.address += fill_count;
 
-            let need_newline = fill_count + rem >= bpr;
+            let need_newline = fill_count + r_rem >= bpr;
+            let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
 
             if need_newline {
                 self.out.write_all(b" ")?;
                 self.out
                     .write_all(self.config.third_column_sep.0.as_bytes())?;
+            } else if need_group_sep {
+                self.out.write_all(b" ")?;
             }
 
             let _ = self.text_write.write(out_bytes, &mut self.out, txt_fmt)?;
