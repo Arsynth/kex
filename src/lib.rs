@@ -5,6 +5,9 @@ use std::io::{Read, Result, Write};
 
 pub const DEFAULT_BYTES_PER_ROW: usize = 16;
 
+const SPACE: &[u8] = b" ";
+const NEWLINE: &[u8] = b"\n";
+
 /// The topmost struct for data output
 ///
 /// # Examples
@@ -142,7 +145,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
     /// Finalize manually. Prints last unfinished line with paddings and turns back given output
     pub fn finish(mut self) -> O {
-        self.print_last_line();
+        _ = self.print_last_line();
         self.out.take().unwrap()
     }
 }
@@ -153,12 +156,12 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
     }
 }
 
-impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<O, A, B, T> {
-    fn print_last_line(&mut self) {
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<O, A, B, T> {
+    fn print_last_line(&mut self) -> Result<()> {
         use std::cmp::min;
 
         if !self.text_write.has_data() {
-            return;
+            return Ok(());
         }
 
         let mut addr = self.current_address;
@@ -179,7 +182,7 @@ impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> P
             let out_bytes = fill_count;
 
             let data_str = self.config.fmt.byte.padding_string(out_bytes);
-            _ = out.write_all(data_str.as_bytes());
+            _ = out.write_all(data_str.as_bytes())?;
 
             addr += fill_count;
 
@@ -187,7 +190,7 @@ impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> P
             let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
 
             if need_group_sep {
-                _ = out.write_all(b" ");
+                _ = out.write_all(SPACE)?;
             }
 
             tmp -= fill_count;
@@ -195,18 +198,20 @@ impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> P
 
         let rem = self.current_address % bpr;
         let fill_count = bpr - rem;
-        _ = out.write(b" ");
+        _ = out.write(SPACE)?;
 
-        _ = out.write_all(self.config.third_column_sep.0.as_bytes());
-        _ = self.text_write.flush(&mut out, &mut self.config.fmt.text);
+        _ = out.write_all(self.config.third_column_sep.0.as_bytes())?;
+        _ = self.text_write.flush(&mut out, &mut self.config.fmt.text)?;
 
         let pad = self.config.fmt.text.padding_string(fill_count);
-        _ = out.write_all(pad.as_bytes());
-        _ = out.write_all(self.config.third_column_sep.1.as_bytes());
+        _ = out.write_all(pad.as_bytes())?;
+        _ = out.write_all(self.config.third_column_sep.1.as_bytes())?;
 
-        let _ = out.write(b"\n");
+        let _ = out.write(b"\n")?;
 
         self.out = Some(out);
+
+        Ok(())
     }
 
     fn calc_grouping(&self) -> usize {
@@ -222,7 +227,7 @@ impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> P
 impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<O, A, B, T> {
     /// Accepts bytes chunk. Immediately prints `first` and `second` columns to `out`,
     /// `third` will printed after `second` column is completely filled, or after finalization.
-    pub fn push(&mut self, bytes: &[u8]) -> Result<()> {
+    pub fn push(&mut self, bytes: &[u8]) -> Result<usize> {
         use std::cmp::min;
 
         let grouping = self.calc_grouping();
@@ -236,6 +241,8 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
         let mut out = self.out.take().unwrap();
 
         let result = {
+            let mut wrote: usize = 0;
+
             while tmp.len() > 0 {
                 let addr = self.current_address;
                 // Row remainder
@@ -248,15 +255,23 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 // Check if we need to print address
                 if r_rem == 0 {
                     let addr_str = addr_fmt.format(self.current_address);
-                    out.write_all(addr_str.as_bytes())?;
+                    let bytes = addr_str.as_bytes();
 
-                    out.write_all(b" ")?;
+                    match out.write_all(bytes) {
+                        Ok(_) => wrote + bytes.len(),
+                        Err(e) => return Err(e),
+                    };
+
+                    out.write_all(SPACE)?;
+                    wrote += SPACE.len();
                 }
 
                 let out_bytes = &tmp[..fill_count];
 
                 let data_str = byte_fmt.format(out_bytes);
-                out.write_all(data_str.as_bytes())?;
+                let bytes = data_str.as_bytes();
+                out.write_all(bytes)?;
+                wrote += bytes.len();
 
                 self.current_address += fill_count;
 
@@ -264,23 +279,32 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
 
                 if need_newline {
-                    out.write_all(b" ")?;
-                    out.write_all(self.config.third_column_sep.0.as_bytes())?;
+                    out.write_all(SPACE)?;
+                    wrote += SPACE.len();
+
+                    let bytes = self.config.third_column_sep.0.as_bytes();
+                    out.write_all(bytes)?;
+                    wrote += bytes.len();
                 } else if need_group_sep {
-                    out.write_all(b" ")?;
+                    out.write_all(SPACE)?;
+                    wrote += SPACE.len();
                 }
 
-                let _ = self.text_write.write(out_bytes, &mut out, txt_fmt)?;
+                wrote += self.text_write.write(out_bytes, &mut out, txt_fmt)?;
 
                 if need_newline {
-                    out.write_all(self.config.third_column_sep.1.as_bytes())?;
-                    out.write_all(b"\n")?;
+                    let bytes = self.config.third_column_sep.1.as_bytes();
+                    out.write_all(bytes)?;
+                    wrote += bytes.len();
+
+                    out.write_all(NEWLINE)?;
+                    wrote += NEWLINE.len();
                 }
 
                 tmp = &tmp[fill_count..];
             }
 
-            Ok(())
+            Ok(wrote)
         };
 
         self.out = Some(out);
@@ -314,11 +338,21 @@ impl<O: Write> Printer<O, AddressFormatter, ByteFormatter, CharFormatter> {
     }
 }
 
-impl<'a, O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Drop
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Write for Printer<O, A, B, T>  {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        self.push(buf)
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        self.print_last_line()
+    }
+}
+
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Drop
     for Printer<O, A, B, T>
 {
     fn drop(&mut self) {
-        self.print_last_line();
+        _ = self.print_last_line();
     }
 }
 
