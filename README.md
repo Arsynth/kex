@@ -1,6 +1,9 @@
 # kex
 Streamed hex dumping library.
 
+# Documentation
+https://docs.rs/kex/0.1.1/kex/
+
 # Features
 * Streamed I/O.
 * Works with output, implementing `Write` trait.
