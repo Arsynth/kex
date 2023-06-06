@@ -544,7 +544,7 @@ impl ByteFormatting for CharFormatter {
         let strs: Vec<String> = bytes
             .iter()
             .map(|b| match AsciiChar::from_ascii(*b) {
-                Ok(chr) => chr.to_string(),
+                Ok(chr) => if chr.is_ascii_printable() {chr.to_string()} else {".".to_string()},
                 Err(_) => ".".to_string(),
             })
             .collect();
