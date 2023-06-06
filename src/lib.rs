@@ -241,8 +241,6 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
         let mut out = self.out.take().unwrap();
 
         let result = {
-            let mut wrote: usize = 0;
-
             while tmp.len() > 0 {
                 let addr = self.current_address;
                 // Row remainder
@@ -256,14 +254,9 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 if r_rem == 0 {
                     let addr_str = addr_fmt.format(self.current_address);
                     let bytes = addr_str.as_bytes();
-
-                    match out.write_all(bytes) {
-                        Ok(_) => wrote + bytes.len(),
-                        Err(e) => return Err(e),
-                    };
-
+                    out.write_all(bytes)?;
+                    
                     out.write_all(SPACE)?;
-                    wrote += SPACE.len();
                 }
 
                 let out_bytes = &tmp[..fill_count];
@@ -271,7 +264,6 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 let data_str = byte_fmt.format(out_bytes);
                 let bytes = data_str.as_bytes();
                 out.write_all(bytes)?;
-                wrote += bytes.len();
 
                 self.current_address += fill_count;
 
@@ -280,31 +272,26 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
                 if need_newline {
                     out.write_all(SPACE)?;
-                    wrote += SPACE.len();
 
                     let bytes = self.config.third_column_sep.0.as_bytes();
                     out.write_all(bytes)?;
-                    wrote += bytes.len();
                 } else if need_group_sep {
                     out.write_all(SPACE)?;
-                    wrote += SPACE.len();
                 }
 
-                wrote += self.text_write.write(out_bytes, &mut out, txt_fmt)?;
+                self.text_write.write(out_bytes, &mut out, txt_fmt)?;
 
                 if need_newline {
                     let bytes = self.config.third_column_sep.1.as_bytes();
                     out.write_all(bytes)?;
-                    wrote += bytes.len();
 
                     out.write_all(NEWLINE)?;
-                    wrote += NEWLINE.len();
                 }
 
                 tmp = &tmp[fill_count..];
             }
 
-            Ok(wrote)
+            Ok(bytes.len())
         };
 
         self.out = Some(out);
