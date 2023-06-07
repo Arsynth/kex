@@ -114,7 +114,8 @@ pub struct Printer<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFor
     out: Option<O>,
 
     /// Base address to print.
-    current_address: usize,
+    printable_address: usize,
+    address: usize,
     config: Config<A, B, T>,
 
     text_write: TextWrite,
@@ -137,7 +138,8 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
         let text_write = TextWrite::new(config.bytes_per_row);
         Printer {
             out: Some(out),
-            current_address: start_address,
+            printable_address: start_address,
+            address: 0,
             config,
             text_write,
         }
@@ -152,7 +154,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
 impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<O, A, B, T> {
     pub fn current_address(&self) -> usize {
-        self.current_address
+        self.printable_address
     }
 }
 
@@ -164,7 +166,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
             return Ok(());
         }
 
-        let mut addr = self.current_address;
+        let mut addr = self.address;
         let bpr = self.config.bytes_per_row;
         let grouping = self.calc_grouping();
         let mut tmp = bpr - (addr % bpr);
@@ -196,7 +198,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
             tmp -= fill_count;
         }
 
-        let rem = self.current_address % bpr;
+        let rem = self.address % bpr;
         let fill_count = bpr - rem;
         _ = out.write(SPACE)?;
 
@@ -242,7 +244,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
         let result = {
             while tmp.len() > 0 {
-                let addr = self.current_address;
+                let addr = self.address;
                 // Row remainder
                 let r_rem = addr % bpr;
                 // Group remainder
@@ -252,7 +254,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
                 // Check if we need to print address
                 if r_rem == 0 {
-                    let addr_str = addr_fmt.format(self.current_address);
+                    let addr_str = addr_fmt.format(self.printable_address);
                     let bytes = addr_str.as_bytes();
                     out.write_all(bytes)?;
                     
@@ -265,7 +267,8 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 let bytes = data_str.as_bytes();
                 out.write_all(bytes)?;
 
-                self.current_address += fill_count;
+                self.address += fill_count;
+                self.printable_address += fill_count;
 
                 let need_newline = fill_count + r_rem >= bpr;
                 let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
@@ -544,7 +547,7 @@ impl ByteFormatting for CharFormatter {
         let strs: Vec<String> = bytes
             .iter()
             .map(|b| match AsciiChar::from_ascii(*b) {
-                Ok(chr) => if chr.is_ascii_printable() {chr.to_string()} else {".".to_string()},
+                Ok(chr) => if chr.is_ascii_printable() && !chr.is_ascii_control() {chr.to_string()} else {".".to_string()},
                 Err(_) => ".".to_string(),
             })
             .collect();

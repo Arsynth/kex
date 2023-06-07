@@ -2,7 +2,7 @@
 Streamed hex dumping library.
 
 # Documentation
-https://docs.rs/kex/0.1.4/kex/
+https://docs.rs/kex/0.1.5/kex/
 
 # Features
 * Streamed I/O.
