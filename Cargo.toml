@@ -1,10 +1,10 @@
 [package]
 name = "kex"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/Arsynth/kex"
-keywords = ["hex", "hexdump", "streamed"]
+keywords = ["hex", "hexdump", "streamed", "dump", "I/O"]
 categories = ["parsing"]
 description = "Library for streamed hex dumping"
 
