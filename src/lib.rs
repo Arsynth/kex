@@ -1,9 +1,11 @@
 //! `kex` - library for streamed hex dumping
 
 use ascii::*;
-use std::io::{Read, Result, Write};
+use std::cmp::min;
+use std::io::*;
 
 pub const DEFAULT_BYTES_PER_ROW: usize = 16;
+pub const DEFAULT_NUMBER_OF_GROUPS: usize = 4;
 
 const SPACE: &[u8] = b" ";
 const NEWLINE: &[u8] = b"\n";
@@ -160,7 +162,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
 impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Printer<O, A, B, T> {
     fn print_last_line(&mut self) -> Result<()> {
-        use std::cmp::min;
+        let third_column_sep = self.config.decorations.third_column_sep.clone();
 
         if !self.text_write.has_data() {
             return Ok(());
@@ -202,12 +204,12 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
         let fill_count = bpr - rem;
         _ = out.write(SPACE)?;
 
-        _ = out.write_all(self.config.third_column_sep.0.as_bytes())?;
+        _ = out.write_all(third_column_sep.0.as_bytes())?;
         _ = self.text_write.flush(&mut out, &mut self.config.fmt.text)?;
 
         let pad = self.config.fmt.text.padding_string(fill_count);
         _ = out.write_all(pad.as_bytes())?;
-        _ = out.write_all(self.config.third_column_sep.1.as_bytes())?;
+        _ = out.write_all(third_column_sep.1.as_bytes())?;
 
         let _ = out.write(b"\n")?;
 
@@ -230,7 +232,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
     /// Accepts bytes chunk. Immediately prints `first` and `second` columns to `out`,
     /// `third` will printed after `second` column is completely filled, or after finalization.
     pub fn push(&mut self, bytes: &[u8]) -> Result<usize> {
-        use std::cmp::min;
+        let third_column_sep = self.config.decorations.third_column_sep.clone();
 
         let grouping = self.calc_grouping();
 
@@ -257,7 +259,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                     let addr_str = addr_fmt.format(self.printable_address);
                     let bytes = addr_str.as_bytes();
                     out.write_all(bytes)?;
-                    
+
                     out.write_all(SPACE)?;
                 }
 
@@ -276,7 +278,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 if need_newline {
                     out.write_all(SPACE)?;
 
-                    let bytes = self.config.third_column_sep.0.as_bytes();
+                    let bytes = third_column_sep.0.as_bytes();
                     out.write_all(bytes)?;
                 } else if need_group_sep {
                     out.write_all(SPACE)?;
@@ -285,7 +287,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 self.text_write.write(out_bytes, &mut out, txt_fmt)?;
 
                 if need_newline {
-                    let bytes = self.config.third_column_sep.1.as_bytes();
+                    let bytes = third_column_sep.1.as_bytes();
                     out.write_all(bytes)?;
 
                     out.write_all(NEWLINE)?;
@@ -328,7 +330,9 @@ impl<O: Write> Printer<O, AddressFormatter, ByteFormatter, CharFormatter> {
     }
 }
 
-impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Write for Printer<O, A, B, T>  {
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Write
+    for Printer<O, A, B, T>
+{
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.push(buf)
     }
@@ -351,9 +355,9 @@ pub struct Config<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     fmt: Formatters<A, B, T>,
 
     bytes_per_row: usize,
-
     byte_grouping: usize,
-    third_column_sep: (String, String),
+
+    decorations: Decorations,
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Config<A, B, T> {
@@ -375,7 +379,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Config<A, B, T>
             fmt,
             bytes_per_row: bpr,
             byte_grouping,
-            third_column_sep,
+            decorations: Decorations { third_column_sep },
         }
     }
 }
@@ -389,7 +393,7 @@ impl<A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatt
             fmt,
             bytes_per_row: 16,
             byte_grouping: 4,
-            third_column_sep: ("|".to_string(), "|".to_string()),
+            decorations: Default::default(),
         }
     }
 }
@@ -404,6 +408,16 @@ pub struct Formatters<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Formatters<A, B, T> {
     pub fn new(addr: A, byte: B, text: T) -> Self {
         Self { addr, byte, text }
+    }
+}
+
+pub struct Decorations {
+    third_column_sep: (String, String),
+}
+
+impl Default for Decorations {
+    fn default() -> Self {
+        Self { third_column_sep: ("|".to_string(), "|".to_string()) }
     }
 }
 
@@ -428,8 +442,6 @@ impl TextWrite {
         out: &mut dyn Write,
         fmt: &mut T,
     ) -> Result<usize> {
-        use std::cmp::min;
-
         let len = min(bytes.len(), self.buf.len() - self.avail);
 
         let mut tmp = &bytes[..];
@@ -547,7 +559,13 @@ impl ByteFormatting for CharFormatter {
         let strs: Vec<String> = bytes
             .iter()
             .map(|b| match AsciiChar::from_ascii(*b) {
-                Ok(chr) => if chr.is_ascii_printable() && !chr.is_ascii_control() {chr.to_string()} else {".".to_string()},
+                Ok(chr) => {
+                    if chr.is_ascii_printable() && !chr.is_ascii_control() {
+                        chr.to_string()
+                    } else {
+                        ".".to_string()
+                    }
+                }
                 Err(_) => ".".to_string(),
             })
             .collect();
@@ -556,5 +574,162 @@ impl ByteFormatting for CharFormatter {
 
     fn padding_string(&mut self, byte_count: usize) -> String {
         " ".repeat(byte_count)
+    }
+}
+
+pub struct StrictPrinter<
+    O: Write,
+    A: AddressFormatting,
+    B: ByteFormatting,
+    T: ByteFormatting,
+    const GROUP: usize,
+> {
+    out: Option<Printer<O, A, B, T>>,
+
+    buf: Vec<u8>,
+    avail: usize,
+}
+
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const GROUP: usize>
+    StrictPrinter<O, A, B, T, GROUP>
+{
+    pub fn new(out: O, config: StrictConfig<A, B, T>, addr: usize) -> Self {
+        let n_groups = match GROUP {
+            0 => 1,
+            _ => {
+                if config.number_of_groups > 0 {
+                    config.number_of_groups
+                } else {
+                    DEFAULT_NUMBER_OF_GROUPS
+                }
+            }
+        };
+        let group_size = if GROUP > 0 {
+            GROUP
+        } else {
+            DEFAULT_BYTES_PER_ROW
+        };
+
+        let config = Config::new(
+            config.fmt,
+            n_groups * group_size,
+            group_size,
+            config.decorations.third_column_sep,
+        );
+        let bytes_per_row = config.bytes_per_row;
+        let out = Printer::new(out, addr as usize, config);
+
+        Self {
+            out: Some(out),
+            buf: vec![0u8; bytes_per_row],
+            avail: 0,
+        }
+    }
+
+    pub fn finish(mut self) -> O {
+        let mut out = self.out.take().unwrap();
+        _ = out.write_all(&mut self.buf[..self.avail]);
+        out.finish()
+    }
+}
+
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const GROUP: usize> Write
+    for StrictPrinter<O, A, B, T, GROUP>
+{
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use std::io::*;
+        match self.write_groupped(buf) {
+            Ok(written) => Ok(written),
+            Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        use std::io::*;
+        let mut out = self.out.take().unwrap();
+
+        match self.try_write_all_available() {
+            Ok(_) => (),
+            Err(e) => {
+                self.out = Some(out);
+                return Err(Error::new(ErrorKind::Other, e.to_string()));
+            }
+        }
+
+        let result = out.flush();
+        self.out = Some(out);
+        result
+    }
+}
+
+impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const GROUP: usize>
+    StrictPrinter<O, A, B, T, GROUP>
+{
+    fn write_groupped(&mut self, buf: &[u8]) -> Result<usize> {
+        let mut tmp = buf;
+        while tmp.len() > 0 {
+            let fill_count = min(self.buf.len() - self.avail, tmp.len());
+            tmp.read_exact(&mut self.buf[self.avail..fill_count])?;
+
+            self.avail += fill_count;
+            if self.avail == GROUP {
+                self.try_write_all_available()?;
+            }
+        }
+
+        Ok(buf.len())
+    }
+
+    fn try_write_all_available(&mut self) -> Result<()> {
+        if self.avail != GROUP {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "StrictPrinter: Buffer is not fulfilled",
+            ));
+        }
+
+        let mut out = self.out.take().unwrap();
+        let result = out.write_all(&mut self.buf);
+        self.out = Some(out);
+
+        self.avail = 0;
+
+        result
+    }
+}
+
+/// Configuration of strict formatting
+pub struct StrictConfig<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
+    fmt: Formatters<A, B, T>,
+    number_of_groups: usize,
+    decorations: Decorations,
+}
+
+impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> StrictConfig<A, B, T> {
+    /// Create new config.
+    /// `bytes_per_row` should be greater than zero, otherwise it defaults to [`DEFAULT_BYTES_PER_ROW`]
+    pub fn new(
+        fmt: Formatters<A, B, T>,
+        number_of_groups: usize,
+        decorations: Decorations,
+    ) -> Self {
+        Self {
+            fmt,
+            number_of_groups,
+            decorations,
+        }
+    }
+}
+
+impl<A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatting + Default>
+    Default for StrictConfig<A, B, T>
+{
+    fn default() -> Self {
+        let fmt: Formatters<A, B, T> = Formatters::new(A::default(), B::default(), T::default());
+        Self {
+            fmt,
+            number_of_groups: DEFAULT_NUMBER_OF_GROUPS,
+            decorations: Default::default(),
+        }
     }
 }
