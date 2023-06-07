@@ -593,7 +593,7 @@ pub struct StrictPrinter<
 impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const GROUP: usize>
     StrictPrinter<O, A, B, T, GROUP>
 {
-    pub fn new(out: O, config: StrictConfig<A, B, T>, addr: usize) -> Self {
+    pub fn new(out: O, addr: usize, config: StrictConfig<A, B, T>) -> Self {
         let n_groups = match GROUP {
             0 => 1,
             _ => {
@@ -669,10 +669,11 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const
         let mut tmp = buf;
         while tmp.len() > 0 {
             let fill_count = min(self.buf.len() - self.avail, tmp.len());
-            tmp.read_exact(&mut self.buf[self.avail..fill_count])?;
+
+            tmp.read_exact(&mut self.buf[self.avail..self.avail + fill_count])?;
 
             self.avail += fill_count;
-            if self.avail == GROUP {
+            if self.avail == self.buf.len() {
                 self.try_write_all_available()?;
             }
         }
@@ -681,7 +682,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const
     }
 
     fn try_write_all_available(&mut self) -> Result<()> {
-        if self.avail != GROUP {
+        if self.avail != self.buf.len() {
             return Err(Error::new(
                 ErrorKind::Other,
                 "StrictPrinter: Buffer is not fulfilled",
@@ -698,6 +699,27 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting, const
     }
 }
 
+impl<O: Write, A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatting + Default, const GROUP: usize>
+    StrictPrinter<O, A, B, T, GROUP>
+{
+    pub fn default_with(out: O, start_address: usize) -> StrictPrinter<O, A, B, T, GROUP> {
+        Self::new(out, start_address, StrictConfig::<A, B, T>::default())
+    }
+}
+
+impl<O: Write, const GROUP: usize> StrictPrinter<O, AddressFormatter, ByteFormatter, CharFormatter, GROUP> {
+    pub fn default_fmt_with(
+        out: O,
+        start_address: usize,
+    ) -> StrictPrinter<O, AddressFormatter, ByteFormatter, CharFormatter, GROUP> {
+        Self::new(
+            out,
+            start_address,
+            StrictConfig::<AddressFormatter, ByteFormatter, CharFormatter>::default(),
+        )
+    }
+}
+
 /// Configuration of strict formatting
 pub struct StrictConfig<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     fmt: Formatters<A, B, T>,
@@ -707,7 +729,7 @@ pub struct StrictConfig<A: AddressFormatting, B: ByteFormatting, T: ByteFormatti
 
 impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> StrictConfig<A, B, T> {
     /// Create new config.
-    /// `bytes_per_row` should be greater than zero, otherwise it defaults to [`DEFAULT_BYTES_PER_ROW`]
+    /// `number_of_groups` should be greater than zero, otherwise it defaults to [`DEFAULT_NUMBER_OF_GROUPS`]
     pub fn new(
         fmt: Formatters<A, B, T>,
         number_of_groups: usize,
