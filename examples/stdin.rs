@@ -1,9 +1,15 @@
+//! Example for reading from `stdin`
+
 use std::io::{Read, Write};
 
 use kex::*;
 
 /// Usage:
+/// cargo run --example stdin
+/// 
+/// Or:
 /// cat /bin/cat | cargo run --example stdin
+/// 
 fn main() {
     use std::io::stdout;
 

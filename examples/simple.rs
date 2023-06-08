@@ -1,3 +1,4 @@
+//! Simple example
 use kex::*;
 
 fn main() {

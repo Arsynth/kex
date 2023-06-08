@@ -1,3 +1,5 @@
+//! Example of strict groupping
+
 use std::io::Write;
 
 use kex::*;
