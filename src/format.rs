@@ -1,4 +1,5 @@
 use ascii::*;
+use std::cmp::min;
 
 pub const DEFAULT_BYTES_PER_ROW: usize = 16;
 pub const DEFAULT_GROUP_SIZE: usize = 4;
@@ -236,8 +237,6 @@ impl Default for ByteFormatter {
 
 impl ByteFormatting for ByteFormatter {
     fn format(&mut self, bytes: &[u8], byte_number_in_row: usize) -> String {
-        use std::cmp::min;
-
         let gr = &self.groupping;
 
         if let ByteOrder::Strict = self.byte_order() {
@@ -276,7 +275,32 @@ impl ByteFormatting for ByteFormatter {
     }
 
     fn padding_string(&mut self, byte_count: usize, byte_number_in_row: usize) -> String {
-        "..".repeat(byte_count)
+        let padding = "..";
+        let gr = &self.groupping;
+        let sep = gr.separator();
+
+        let mut result = String::new();
+        
+        let mut tmp = gr.bytes_per_row() - byte_number_in_row;
+        let mut byte_number = byte_number_in_row;
+        while tmp != 0 {
+            let to_format = min(tmp, gr.bytes_left_in_group_after(byte_number));
+
+            byte_number += to_format;
+
+            let needs_separator = tmp > 0 && to_format == 0;
+            if needs_separator {
+                result += &sep;
+            }
+
+            if to_format != 0 {
+                result += &padding.repeat(to_format);
+            }
+
+            tmp -= to_format;
+        }
+
+        result
     }
 }
 
@@ -358,6 +382,8 @@ mod tests {
             }
 
             out += &fmt.padding_string(self.bpr - num, num);
+
+            assert_eq!(out, self.result);
         }
     }
 
