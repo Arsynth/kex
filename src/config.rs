@@ -1,9 +1,6 @@
 
 use super::format::*;
 
-pub const DEFAULT_BYTES_PER_ROW: usize = 16;
-pub const DEFAULT_NUMBER_OF_GROUPS: usize = 1;
-
 /// Configuration of formatting
 pub struct Config<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     pub(super) fmt: Formatters<A, B, T>,
@@ -21,7 +18,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Config<A, B, T>
         fmt: Formatters<A, B, T>,
         bytes_per_row: usize,
         byte_grouping: usize,
-        third_column_sep: (String, String),
+        decorations: Decorations,
     ) -> Self {
         let bpr = if bytes_per_row == 0 {
             DEFAULT_BYTES_PER_ROW
@@ -33,7 +30,7 @@ impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Config<A, B, T>
             fmt,
             bytes_per_row: bpr,
             byte_grouping,
-            decorations: Decorations { third_column_sep },
+            decorations,
         }
     }
 }
@@ -104,6 +101,29 @@ impl<A: AddressFormatting + Default, B: ByteFormatting + Default, T: ByteFormatt
             group_size: 0,
             number_of_groups: 0,
             decorations: Default::default(),
+        }
+    }
+}
+
+pub struct Decorations {
+    pub(super) third_column_sep: (Vec<u8>, Vec<u8>),
+}
+
+impl Decorations {
+    pub fn new(third_column_sep: (String, String)) -> Self {
+        Self {
+            third_column_sep: (
+                Vec::from(third_column_sep.0.as_bytes()),
+                Vec::from(third_column_sep.1.as_bytes()),
+            )
+        }
+    }
+}
+
+impl Default for Decorations {
+    fn default() -> Self {
+        Self {
+            third_column_sep: (Vec::from("|".as_bytes()), Vec::from("|".as_bytes())),
         }
     }
 }

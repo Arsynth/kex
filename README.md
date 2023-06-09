@@ -9,7 +9,7 @@ Streamed hex dumping library.
 
 # Examples
 ## One of examples
-``` Rust
+```rust
 //! Example for reading from `stdin`
 
 use std::io::{Read, Write};

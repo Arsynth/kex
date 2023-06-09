@@ -27,7 +27,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting>
             config.fmt,
             config.number_of_groups * config.group_size,
             config.group_size,
-            config.decorations.third_column_sep,
+            config.decorations,
         );
         let bytes_per_row = config.bytes_per_row;
         let out = Printer::new(out, addr as usize, config);

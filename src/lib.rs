@@ -12,110 +12,10 @@ pub use format::*;
 pub mod adapters;
 pub use adapters::*;
 
+const ROW_SEPARATOR: &[u8] = b"\n";
 const SPACE: &[u8] = b" ";
-const NEWLINE: &[u8] = b"\n";
 
 /// The topmost struct for data output
-///
-/// # Examples
-///
-/// ```
-/// use kex::*;
-/// use std::{io::{stdout, Stdout}, fs::File};
-/// fn main() {
-///     let fmt = Formatters::new(
-///         MyAddrFormatter::new(),
-///         MyByteFormatter::new(),
-///         CharFormatter::new(),
-///     );
-///     let config = Config::new(fmt, 9, 3, ('\u{1F4A5}'.to_string(), '\u{1F4A8}'.to_string()));
-///     let mut printer = Printer::new(Box::new(stdout()), 0, config);
-///     let mut _printer = Printer::<Box<Stdout>, AddressFormatter, ByteFormatter, CharFormatter>::default_with(Box::new(stdout()), 0);
-///     
-///     let mut _printer = Printer::default_fmt_with(Box::new(stdout()), 0);
-///
-///     let bytes1 = &[222u8, 173, 190, 239];
-///     let bytes2 = &[0xfeu8, 0xed, 0xfa];
-///     let it_works = &[
-///         0x49u8, 0x74, 0x20, 0x77, 0x6f, 0x72, 0x6b, 0x73, 0x21, 0x21, 0x21,
-///     ];
-
-///     for _ in 0..10 {
-///         _ = printer.push(bytes1);
-///     }
-
-///     _ = printer.push(it_works);
-
-///     for _ in 0..11 {
-///         _ = printer.push(bytes2);
-///     }
-
-///     printer.finish();
-
-///     println!("\nPrinting to vector:\n");
-
-///     let out = Box::new(Vec::<u8>::new());
-///     let mut printer = Printer::default_fmt_with(out, 0);
-
-///     _ = printer.push(bytes1);
-///     _ = printer.push(it_works);
-///     _ = printer.push(bytes2);
-
-///     let out = printer.finish();
-
-///     let result = std::str::from_utf8(&*out).unwrap();
-///     println!("{}", result);
-
-///     let file = File::create("target/hexdump.txt").unwrap();
-///     let mut printer = Printer::default_fmt_with(file, 0);
-///     _ = printer.push(bytes1);
-///     _ = printer.push(it_works);
-///     _ = printer.push(bytes2);
-///     _ = printer.finish();
-/// }
-///
-/// struct MyAddrFormatter {
-///     fmt: AddressFormatter,
-/// }
-///
-/// impl MyAddrFormatter {
-///     fn new() -> Self {
-///         MyAddrFormatter {
-///             fmt: AddressFormatter::new(8),
-///         }
-///     }
-/// }
-
-/// impl AddressFormatting for MyAddrFormatter {
-///     fn format(&self, addr: usize) -> String {
-///         const EMOJI: char = '\u{1F929}';
-///         format!("{}{EMOJI}", self.fmt.format(addr))
-///     }
-/// }
-
-/// struct MyByteFormatter {
-///     fmt: ByteFormatter,
-/// }
-///
-/// impl MyByteFormatter {
-///     fn new() -> Self {
-///         Self {
-///             fmt: ByteFormatter::new(),
-///         }
-///     }
-/// }
-///
-/// impl ByteFormatting for MyByteFormatter {
-///     fn format(&mut self, bytes: &[u8]) -> String {
-///         self.fmt.format(bytes)
-///     }
-
-///     fn padding_string(&mut self, byte_count: usize) -> String {
-///         format!("Xx").repeat(byte_count)
-///     }
-/// }
-///
-/// ```
 pub struct Printer<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
     /// Where to print data
     out: Option<O>,
@@ -188,19 +88,10 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
             let fill_count = min(min(grouping - g_rem, bpr - r_rem), tmp);
 
-            let out_bytes = fill_count;
-
-            let data_str = self.config.fmt.byte.padding_string(out_bytes);
+            let data_str = self.config.fmt.byte.padding_string(fill_count, bpr - tmp);
             _ = out.write_all(data_str.as_bytes())?;
 
             addr += fill_count;
-
-            let need_newline = fill_count + r_rem >= bpr;
-            let need_group_sep = !need_newline & (fill_count + g_rem >= grouping);
-
-            if need_group_sep {
-                _ = out.write_all(SPACE)?;
-            }
 
             tmp -= fill_count;
         }
@@ -209,12 +100,12 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
         let fill_count = bpr - rem;
         _ = out.write(SPACE)?;
 
-        _ = out.write_all(third_column_sep.0.as_bytes())?;
+        _ = out.write_all(&third_column_sep.0)?;
         _ = self.text_write.flush(&mut out, &mut self.config.fmt.text)?;
 
-        let pad = self.config.fmt.text.padding_string(fill_count);
+        let pad = self.config.fmt.text.padding_string(fill_count, bpr - fill_count);
         _ = out.write_all(pad.as_bytes())?;
-        _ = out.write_all(third_column_sep.1.as_bytes())?;
+        _ = out.write_all(&third_column_sep.1)?;
 
         let _ = out.write(b"\n")?;
 
@@ -270,7 +161,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
 
                 let out_bytes = &tmp[..fill_count];
 
-                let data_str = byte_fmt.format(out_bytes);
+                let data_str = byte_fmt.format(out_bytes, bpr - r_rem);
                 let bytes = data_str.as_bytes();
                 out.write_all(bytes)?;
 
@@ -283,19 +174,17 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Print
                 if need_newline {
                     out.write_all(SPACE)?;
 
-                    let bytes = third_column_sep.0.as_bytes();
+                    let bytes = &third_column_sep.0;
                     out.write_all(bytes)?;
-                } else if need_group_sep {
-                    out.write_all(SPACE)?;
                 }
 
                 self.text_write.write(out_bytes, &mut out, txt_fmt)?;
 
                 if need_newline {
-                    let bytes = third_column_sep.1.as_bytes();
+                    let bytes = &third_column_sep.1;
                     out.write_all(bytes)?;
 
-                    out.write_all(NEWLINE)?;
+                    out.write_all(ROW_SEPARATOR)?;
                 }
 
                 tmp = &tmp[fill_count..];
@@ -384,7 +273,7 @@ impl TextWrite {
         self.avail += len;
 
         if self.avail == self.buf.len() {
-            let s = fmt.format(&self.buf);
+            let s = fmt.format(&self.buf, 0);
             let _ = out.write_all(s.as_bytes())?;
 
             self.avail = 0;
@@ -394,14 +283,7 @@ impl TextWrite {
     }
 
     fn flush<T: ByteFormatting>(&mut self, out: &mut dyn Write, fmt: &mut T) -> Result<()> {
-        if self.avail > 0 {
-            let s = fmt.format(&self.buf[..self.avail]);
-            out.write_all(s.as_bytes())?;
-
-            self.avail = 0;
-        }
-
-        Ok(())
+        todo!()
     }
 
     fn has_data(&self) -> bool {
