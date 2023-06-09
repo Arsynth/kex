@@ -48,7 +48,7 @@ pub trait ByteFormatting {
 
 pub trait ByteOrdered {
     /// Requirement for byte portions passing in the `format(...)` function
-    fn byte_ordering(&self) -> ByteOrder;
+    fn byte_order(&self) -> ByteOrder;
 
     fn groupping(&self) -> &Groupping;
 }
@@ -61,7 +61,6 @@ pub enum ByteOrder {
     /// Bytes will be provided as soon as new data available in [`super::Printer`]
     Relaxed,
 }
-
 
 /// Byte formatting style
 pub enum Groupping {
@@ -85,7 +84,30 @@ impl Groupping {
         }
     }
 
-    fn row_size(&self) -> usize {
+    fn is_aligned_at(&self, number: usize, len: usize) -> bool {
+        let bpr = self.bytes_per_row();
+        assert!(
+            bpr >= number + len,
+            "is_aligned_at(): Trying to exceed maximum row length"
+        );
+
+        match self {
+            Groupping::RowWide(_) => number == 0 && len == bpr,
+            Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
+                let rem = bpr % g.size;
+                if rem == 0 {
+                    number % g.size == 0 && len == g.size
+                } else {
+                    let rem_group = rem;
+                    let n_aligned_groups = (bpr - rem_group) / g.size;
+
+                    number == n_aligned_groups * g.size && len == rem_group
+                }
+            }
+        }
+    }
+
+    fn bytes_per_row(&self) -> usize {
         match self {
             Groupping::RowWide(r) => *r,
             Groupping::RepeatingGroup(g, rep) => g.size * rep,
@@ -104,28 +126,36 @@ impl Groupping {
                 } else {
                     (r - rem) / g.size + 1
                 }
-            },
+            }
         }
     }
 
     fn group_of_byte(&self, number: usize) -> usize {
+        assert!(
+            self.bytes_per_row() >= number,
+            "group_of_byte():Trying to exceed maximum row length"
+        );
         match self {
             Groupping::RowWide(_) => 0,
             Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
                 let group_size = g.size;
                 let rem = number % group_size;
                 (number - rem) / group_size
-            },
+            }
         }
     }
 
     fn bytes_left_in_group_after(&self, number: usize) -> usize {
+        assert!(
+            self.bytes_per_row() >= number,
+            "bytes_left_in_group_after(): Trying to exceed maximum row length"
+        );
         match self {
             Groupping::RowWide(r) => r - number,
             Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
                 let group_num = self.group_of_byte(number);
                 g.size * group_num - number
-            },
+            }
         }
     }
 }
@@ -188,7 +218,10 @@ pub struct ByteFormatter {
 
 impl ByteFormatter {
     pub fn new(groupping: Groupping, is_little_endian: bool) -> Self {
-        Self { groupping, is_little_endian }
+        Self {
+            groupping,
+            is_little_endian,
+        }
     }
 }
 
@@ -196,7 +229,7 @@ impl Default for ByteFormatter {
     fn default() -> Self {
         Self {
             groupping: Default::default(),
-            is_little_endian: false
+            is_little_endian: false,
         }
     }
 }
@@ -205,18 +238,23 @@ impl ByteFormatting for ByteFormatter {
     fn format(&mut self, bytes: &[u8], byte_number_in_row: usize) -> String {
         use std::cmp::min;
 
+        let gr = &self.groupping;
+
+        if let ByteOrder::Strict = self.byte_order() {
+            assert!(
+                gr.is_aligned_at(byte_number_in_row, bytes.len()),
+                "ByteOrder::Strict require that provided bytes are aligned to groups"
+            );
+        }
+
         let mut result = String::new();
 
-        let gr = &self.groupping;
         let sep = gr.separator();
         let mut tmp = bytes;
 
         let mut byte_number = byte_number_in_row;
         while tmp.len() != 0 {
-            let to_format = min(
-                tmp.len(),
-                gr.bytes_left_in_group_after(byte_number),
-            );
+            let to_format = min(tmp.len(), gr.bytes_left_in_group_after(byte_number));
 
             byte_number += to_format;
 
@@ -243,7 +281,7 @@ impl ByteFormatting for ByteFormatter {
 }
 
 impl ByteOrdered for ByteFormatter {
-    fn byte_ordering(&self) -> ByteOrder {
+    fn byte_order(&self) -> ByteOrder {
         if self.is_little_endian {
             ByteOrder::Strict
         } else {
@@ -299,13 +337,38 @@ impl ByteFormatting for CharFormatter {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    struct Case {
+        parts: Vec<Vec<u8>>,
+        bpr: usize,
+
+        result: String,
+    }
+
+    impl Case {
+        fn run(&self, fmt: &mut ByteFormatter) {
+            let mut out = String::new();
+            let mut num = 0usize;
+            for part in self.parts.iter() {
+                let s = fmt.format(&part[..], num);
+                out += &s;
+
+                num += part.len();
+            }
+
+            out += &fmt.padding_string(self.bpr - num, num);
+        }
+    }
+
     #[test]
     fn test_unordered() {
+        let cases = [(vec![0xfeu8, 0xed, 0xfa, 0xce])];
         assert!(true);
     }
-    
+
     #[test]
-    fn test_ordered() {
-        assert!(true);
+    fn test_little_endian() {
+        assert!(false);
     }
 }
