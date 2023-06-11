@@ -50,15 +50,14 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         let text_fmt = config.fmt.text;
 
         let text_write = TextWriter::new(text_fmt, config.fmt.byte.bytes_per_row());
+        let groupping = config.fmt.byte.groupping();
+        let byte_order = config.fmt.byte.byte_order();
         Printer {
             out: Some(out),
             printable_address: start_address,
             address_fmt: config.fmt.addr,
             byte_fmt: config.fmt.byte,
-            bytes_writer: GrouppedWriter::new(
-                config.fmt.byte.groupping().clone(),
-                config.fmt.byte.byte_order(),
-            ),
+            bytes_writer: GrouppedWriter::new(groupping, byte_order),
             text_writer: text_write,
             decorations: config.decorations,
         }
@@ -83,38 +82,20 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
     pub fn push(&mut self, bytes: &[u8]) -> Result<usize> {
         let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
 
-        let mut b_writer = self.bytes_writer;
         let mut tmp = bytes;
+        let mut b_writer = self.bytes_writer;
 
         let callbacks = Callbacks::new(
             || {
-                let addr_str = self.address_fmt.format(b_writer.address()).as_bytes();
-                _ = out.write_all(addr_str).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                self.on_row_started();
             },
             |write_res| {
-                match write_res {
-                    WriteResult::Stored(_) => (),
-                    WriteResult::ReadyAt(buf, byte_in_row) => {
-                        let str = self.byte_fmt.format(buf, byte_in_row);
-                        out.write_all(str.as_bytes())
-                            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                    }
-                }
+                self.on_data_written(&write_res);
 
                 tmp = &tmp[write_res.bytes_processed()..];
             },
             || {
-                let decor = self.decorations;
-                out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                out.write_all(&decor.third_column_sep.0)
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                self.text_writer
-                    .write(bytes, &mut out)
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                out.write_all(&decor.third_column_sep.1)
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                out.write_all(ROW_SEPARATOR)
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                self.on_row_finished();
             },
         );
 
@@ -136,6 +117,50 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         self.out = Some(out);
 
         Ok(())
+    }
+
+    fn on_row_started(&mut self) {
+        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+
+        let addr_str = self.address_fmt.format(self.bytes_writer.address());
+        _ = out
+            .write_all(addr_str.as_bytes())
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        self.out = Some(out);
+    }
+
+    fn on_data_written(&mut self, data: &WriteResult) {
+        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+
+        match data {
+            WriteResult::Stored(_) => (),
+            WriteResult::ReadyAt(buf, byte_in_row) => {
+                let str = self.byte_fmt.format(&buf[..], *byte_in_row);
+                out.write_all(str.as_bytes())
+                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                self.text_writer
+                    .write(buf, &mut out)
+                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            }
+        }
+
+        self.out = Some(out);
+    }
+
+    fn on_row_finished(&mut self) {
+        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+
+        let decor = &self.decorations;
+        out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        out.write_all(&decor.third_column_sep.0[..])
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        out.write_all(&decor.third_column_sep.1[..])
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        out.write_all(ROW_SEPARATOR)
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        self.out = Some(out);
     }
 }
 

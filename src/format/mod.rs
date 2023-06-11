@@ -32,7 +32,7 @@ pub trait ByteFormatting {
         ByteOrder::Strict
     }
 
-    fn groupping(&self) -> &Groupping;
+    fn groupping(&self) -> Groupping;
 
     fn bytes_per_row(&self) -> usize {
         self.groupping().bytes_per_row()

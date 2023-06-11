@@ -33,8 +33,8 @@ impl ByteFormatting for ByteFormatter {
         }
     }
 
-    fn groupping(&self) -> &Groupping {
-        &self.groupping
+    fn groupping(&self) -> Groupping {
+        self.groupping.clone()
     }
 
     fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
