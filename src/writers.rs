@@ -99,9 +99,12 @@ impl GrouppedWriter {
                         (callbacks.finish_row_cb)();
                     }
 
+                    self.address += back_buf.len();
                     Ok(back_buf.len())
                 } else {
                     (callbacks.write_row_cb)(WriteResult::Stored(fill_count));
+
+                    self.address += fill_count;
                     Ok(fill_count)
                 }
             }
@@ -111,6 +114,8 @@ impl GrouppedWriter {
                 if byte_in_row + to_read == bpr {
                     (callbacks.finish_row_cb)();
                 }
+
+                self.address += to_read;
                 Ok(to_read)
             }
         };
@@ -120,9 +125,12 @@ impl GrouppedWriter {
         result
     }
 
-    pub(super) fn flush<WR: FnMut(&[u8])>(&mut self, mut callback: WR) -> std::io::Result<()> {
+    /// Callback takes buffer and byte number past last byte
+    pub(super) fn flush<WR: FnMut(&[u8], usize)>(&mut self, mut callback: WR) -> std::io::Result<()> {
         let back_buf = self.back_buf.take().expect(LOST_BUFFER_MESSAGE);
-        (callback)(&back_buf[..self.avail]);
+
+        let byte_in_row = self.address % self.groupping.bytes_per_row();
+        (callback)(&back_buf[..self.avail], byte_in_row);
         self.avail = 0;
         self.back_buf = Some(back_buf);
 
@@ -136,63 +144,50 @@ pub(crate) enum WriteResult<'a> {
     ReadyAt(&'a [u8], usize),
 }
 
-impl<'a> WriteResult<'a> {
-    pub(crate) fn bytes_processed(&self) -> usize {
-        match self {
-            WriteResult::Stored(s) => *s,
-            WriteResult::ReadyAt(b, _) => b.len(),
-        }
-    }
-}
-
 pub(super) struct TextWriter<C: CharFormatting> {
     fmt: C,
 
-    buf: Vec<u8>,
+    result: String,
     avail: usize,
+    max_bytes: usize,
 }
 
 impl<C: CharFormatting> TextWriter<C> {
     pub(super) fn new(fmt: C, max_bytes: usize) -> Self {
         Self {
             fmt,
-            buf: vec![0; max_bytes],
+            result: String::new(),
             avail: 0,
+            max_bytes
         }
     }
 }
 
 impl<C: CharFormatting> TextWriter<C> {
-    pub(super) fn write<O: Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<usize> {
-        let len = min(bytes.len(), self.buf.len() - self.avail);
+    pub(super) fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+        assert!(self.avail + bytes.len() <= self.max_bytes, "Text writer received too much bytes before starting new row");
 
-        let mut tmp = &bytes[..];
-        tmp.read_exact(&mut self.buf[self.avail..self.avail + len])?;
+        self.avail += bytes.len();
+        
+        let s = self.fmt.format(bytes);
+        self.result += &s;
 
-        self.avail += len;
-
-        if self.avail == self.buf.len() {
-            let s = self.fmt.format(&self.buf);
-            let _ = out.write_all(s.as_bytes())?;
-
-            self.avail = 0;
-        }
-
-        Ok(len)
+        Ok(bytes.len())
     }
 
-    pub(super) fn flush<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        if self.avail != 0 {
-            let s = self.fmt.format(&self.buf[..self.avail]);
-            let _ = out.write_all(s.as_bytes())?;
+    pub(super) fn take_result(&mut self) -> String {
+        let mut result = (&self.result).to_string();
 
-            self.avail = 0;
-        }
+        let tail = self.fmt.padding_string(self.max_bytes - self.avail);
+        result += &tail;
 
-        Ok(())
+        self.result = String::new();
+        self.avail = 0;
+
+        result
     }
 
     pub(super) fn has_data(&self) -> bool {
-        self.avail != 0
+        self.avail > 0
     }
 }

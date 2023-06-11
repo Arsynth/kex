@@ -84,7 +84,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         let mut b_writer = self.bytes_writer.take().expect(WRITER_LOST_MESSAGE);
 
         let in_ref = Rc::new(RefCell::new(self));
-        
+
         let mut callbacks = Callbacks::new(
             || {
                 Self::on_row_started(in_ref.clone());
@@ -99,8 +99,9 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
 
         let mut tmp = &bytes[..];
         while tmp.len() > 0 {
-
-            let written = b_writer.write(tmp, &mut callbacks).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            let written = b_writer
+                .write(tmp, &mut callbacks)
+                .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
             tmp = &tmp[written..];
         }
 
@@ -117,8 +118,29 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
         let mut b_writer = self.bytes_writer.take().expect(WRITER_LOST_MESSAGE);
 
-        b_writer.flush(|buf| {})?;
-        self.text_writer.flush(&mut out)?;
+        b_writer.flush(|buf, byte_number_in_row| {
+            let last = self.byte_fmt.format(buf, byte_number_in_row - buf.len());
+            out.write_all(last.as_bytes())
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+            self.printable_address += buf.len();
+            let padding = self.byte_fmt.padding_string(byte_number_in_row);
+            out.write_all(padding.as_bytes())
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        })?;
+        
+        out.write_all(SPACE)
+        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        out.write_all(&self.decorations.third_column_sep.0[..])
+        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        let text = self.text_writer.take_result();
+        out.write_all(text.as_bytes())
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+    out.write_all(&self.decorations.third_column_sep.1[..])
+        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
         self.out = Some(out);
         self.bytes_writer = Some(b_writer);
@@ -134,6 +156,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         _ = out
             .write_all(addr_str.as_bytes())
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        _ = out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
         this.out = Some(out);
     }
@@ -148,8 +171,9 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
                 let str = this.byte_fmt.format(&buf[..], *byte_in_row);
                 out.write_all(str.as_bytes())
                     .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
                 this.text_writer
-                    .write(buf, &mut out)
+                    .write(buf)
                     .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
             }
         }
@@ -159,14 +183,22 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
 
     fn on_row_finished(this: Rc<RefCell<&mut Self>>) {
         let mut this = this.borrow_mut();
+        let text = this.text_writer.take_result();
+
         let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
         let decor = &this.decorations;
         out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
         out.write_all(&decor.third_column_sep.0[..])
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        out.write_all(text.as_bytes())
+            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
         out.write_all(&decor.third_column_sep.1[..])
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
         out.write_all(ROW_SEPARATOR)
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 

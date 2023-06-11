@@ -75,7 +75,7 @@ impl ByteFormatting for ByteFormatter {
         result
     }
 
-    fn padding_string(&self, _byte_count: usize, byte_number_in_row: usize) -> String {
+    fn padding_string(&self, byte_number_in_row: usize) -> String {
         let padding = "..";
         let gr = &self.groupping;
         let sep = gr.separator();
@@ -133,7 +133,7 @@ mod tests {
                 num += part.len();
             }
 
-            out += &fmt.padding_string(fmt.groupping.bytes_per_row() - num, num);
+            out += &fmt.padding_string(num);
 
             assert_eq!(out, self.result);
         }

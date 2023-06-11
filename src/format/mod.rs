@@ -57,7 +57,7 @@ pub trait ByteFormatting {
     ///
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
-    fn padding_string(&self, byte_count: usize, byte_number_in_row: usize) -> String;
+    fn padding_string(&self, byte_number_in_row: usize) -> String;
 }
 
 pub trait CharFormatting {
