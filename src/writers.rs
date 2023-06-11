@@ -4,7 +4,11 @@ use std::io::*;
 
 const LOST_BUFFER_MESSAGE: &str = "Somewhere we lost back buffer";
 
-pub(super) struct Callbacks<SR: FnMut(), WR: FnMut(WriteResult), FR: FnMut()> {
+pub(super) struct Callbacks<
+    SR: FnMut() -> Result<()>,
+    WR: FnMut(WriteResult) -> Result<()>,
+    FR: FnMut() -> Result<()>,
+> {
     start_row_cb: SR,
     write_row_cb: WR,
     finish_row_cb: FR,
@@ -12,9 +16,9 @@ pub(super) struct Callbacks<SR: FnMut(), WR: FnMut(WriteResult), FR: FnMut()> {
 
 impl<SR, WR, FR> Callbacks<SR, WR, FR>
 where
-    SR: FnMut(),
-    WR: FnMut(WriteResult),
-    FR: FnMut(),
+    SR: FnMut() -> Result<()>,
+    WR: FnMut(WriteResult) -> Result<()>,
+    FR: FnMut() -> Result<()>,
 {
     pub(super) fn new(start_row_cb: SR, write_row_cb: WR, finish_row_cb: FR) -> Self {
         Self {
@@ -58,9 +62,9 @@ impl GrouppedWriter {
         callbacks: &mut Callbacks<SR, WR, FR>,
     ) -> std::io::Result<usize>
     where
-        SR: FnMut(),
-        WR: FnMut(WriteResult),
-        FR: FnMut(),
+        SR: FnMut() -> Result<()>,
+        WR: FnMut(WriteResult) -> Result<()>,
+        FR: FnMut() -> Result<()>,
     {
         let mut back_buf = self.back_buf.take().expect(LOST_BUFFER_MESSAGE);
 
@@ -68,73 +72,76 @@ impl GrouppedWriter {
         let bpr = gr.bytes_per_row();
         let byte_in_row = self.address % bpr;
 
-        if byte_in_row == 0 {
-            (callbacks.start_row_cb)();
-        }
+        let result = {
+            if byte_in_row == 0 {
+                (callbacks.start_row_cb)()?;
+            }
 
-        let result = match self.order {
-            ByteOrder::Strict => {
-                assert!(
-                    back_buf.len() > 0,
-                    "Back buffer is zero length while ByteOrder::Strict"
-                );
+            match self.order {
+                ByteOrder::Strict => {
+                    assert!(
+                        back_buf.len() > 0,
+                        "Back buffer is zero length while ByteOrder::Strict"
+                    );
 
-                let remaining = gr.bytes_left_in_group_after(byte_in_row);
-                let byte_in_group = gr.byte_number_in_group(byte_in_row);
-                let fill_count = min(remaining, buf.len());
+                    let remaining = gr.bytes_left_in_group_after(byte_in_row);
+                    let byte_in_group = gr.byte_number_in_group(byte_in_row);
+                    let fill_count = min(remaining, buf.len());
 
-                let mut buf_to_read = &mut back_buf[byte_in_group..byte_in_group + fill_count];
-                let mut buf = &buf[..];
-                buf.read_exact(&mut buf_to_read)
-                    .expect("Could not read from buffer");
+                    let mut buf_to_read = &mut back_buf[byte_in_group..byte_in_group + fill_count];
+                    let mut buf = &buf[..];
+                    buf.read_exact(&mut buf_to_read)
+                        .expect("Could not read from buffer");
 
-                let is_row_finished = byte_in_row + fill_count == bpr;
+                    let is_row_finished = byte_in_row + fill_count == bpr;
 
-                if byte_in_group + fill_count == gr.max_group_size()
-                    || is_row_finished
-                {
-                    (callbacks.write_row_cb)(WriteResult::ReadyAt(&back_buf[..], byte_in_row));
+                    if byte_in_group + fill_count == gr.max_group_size() || is_row_finished {
+                        (callbacks.write_row_cb)(WriteResult::ReadyAt(&back_buf[..], byte_in_row))?;
 
-                    if is_row_finished {
-                        (callbacks.finish_row_cb)();
+                        if is_row_finished {
+                            (callbacks.finish_row_cb)()?;
+                        }
+
+                        self.address += back_buf.len();
+                        Ok(back_buf.len())
+                    } else {
+                        (callbacks.write_row_cb)(WriteResult::Stored(fill_count))?;
+
+                        self.address += fill_count;
+                        Ok(fill_count)
+                    }
+                }
+                ByteOrder::Relaxed => {
+                    let to_read = min(buf.len(), bpr - byte_in_row);
+                    (callbacks.write_row_cb)(WriteResult::ReadyAt(&buf[..to_read], byte_in_row))?;
+                    if byte_in_row + to_read == bpr {
+                        (callbacks.finish_row_cb)()?;
                     }
 
-                    self.address += back_buf.len();
-                    Ok(back_buf.len())
-                } else {
-                    (callbacks.write_row_cb)(WriteResult::Stored(fill_count));
-
-                    self.address += fill_count;
-                    Ok(fill_count)
+                    self.address += to_read;
+                    Ok(to_read)
                 }
-            }
-            ByteOrder::Relaxed => {
-                let to_read = min(buf.len(), bpr - byte_in_row);
-                (callbacks.write_row_cb)(WriteResult::ReadyAt(&buf[..to_read], byte_in_row));
-                if byte_in_row + to_read == bpr {
-                    (callbacks.finish_row_cb)();
-                }
-
-                self.address += to_read;
-                Ok(to_read)
             }
         };
-
         self.back_buf = Some(back_buf);
 
         result
     }
 
     /// Callback takes buffer and byte number past last byte
-    pub(super) fn flush<WR: FnMut(&[u8], usize)>(&mut self, mut callback: WR) -> std::io::Result<()> {
+    pub(super) fn flush<WR: FnMut(&[u8], usize) -> Result<()>> (
+        &mut self,
+        mut callback: WR,
+    ) -> std::io::Result<()> {
         let back_buf = self.back_buf.take().expect(LOST_BUFFER_MESSAGE);
 
         let byte_in_row = self.address % self.groupping.bytes_per_row();
-        (callback)(&back_buf[..self.avail], byte_in_row);
+        let result = (callback)(&back_buf[..self.avail], byte_in_row);
         self.avail = 0;
+
         self.back_buf = Some(back_buf);
 
-        Ok(())
+        result
     }
 }
 
@@ -158,17 +165,20 @@ impl<C: CharFormatting> TextWriter<C> {
             fmt,
             result: String::new(),
             avail: 0,
-            max_bytes
+            max_bytes,
         }
     }
 }
 
 impl<C: CharFormatting> TextWriter<C> {
     pub(super) fn write(&mut self, bytes: &[u8]) -> Result<usize> {
-        assert!(self.avail + bytes.len() <= self.max_bytes, "Text writer received too much bytes before starting new row");
+        assert!(
+            self.avail + bytes.len() <= self.max_bytes,
+            "Text writer received too much bytes before starting new row"
+        );
 
         self.avail += bytes.len();
-        
+
         let s = self.fmt.format(bytes);
         self.result += &s;
 

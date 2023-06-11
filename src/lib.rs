@@ -16,7 +16,6 @@ const SPACE: &[u8] = b" ";
 
 const OUTPUT_LOST_MESSAGE: &str = "Somewhere we lost the output";
 const WRITER_LOST_MESSAGE: &str = "Somewhere we lost the writer";
-const CANNOT_WRITE_OUTPUT_MESSAGE: &str = "Could not write to output";
 
 /// The topmost struct for data output
 pub struct Printer<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> {
@@ -87,27 +86,32 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
 
         let mut callbacks = Callbacks::new(
             || {
-                Self::on_row_started(in_ref.clone());
+                Self::on_row_started(in_ref.clone())?;
+                Ok(())
             },
             |write_res| {
-                Self::on_data_written(in_ref.clone(), &write_res);
+                Self::on_data_written(in_ref.clone(), &write_res)?;
+                Ok(())
             },
             || {
-                Self::on_row_finished(in_ref.clone());
+                Self::on_row_finished(in_ref.clone())?;
+                Ok(())
             },
         );
 
         let mut tmp = &bytes[..];
-        while tmp.len() > 0 {
-            let written = b_writer
-                .write(tmp, &mut callbacks)
-                .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-            tmp = &tmp[written..];
-        }
+        let result = {
+            while tmp.len() > 0 {
+                let written = b_writer.write(tmp, &mut callbacks)?;
+                tmp = &tmp[written..];
+            }
+
+            Ok(bytes.len())
+        };
 
         in_ref.borrow_mut().bytes_writer = Some(b_writer);
 
-        Ok(bytes.len())
+        result
     }
 
     fn print_last_line(&mut self) -> Result<()> {
@@ -118,91 +122,103 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
         let mut b_writer = self.bytes_writer.take().expect(WRITER_LOST_MESSAGE);
 
-        b_writer.flush(|buf, byte_number_in_row| {
-            let last = self.byte_fmt.format(buf, byte_number_in_row - buf.len());
-            out.write_all(last.as_bytes())
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        let result = {
+            b_writer.flush(|buf, byte_number_in_row| {
+                let last = self.byte_fmt.format(buf, byte_number_in_row - buf.len());
+                out.write_all(last.as_bytes())?;
 
-            self.printable_address += buf.len();
-            let padding = self.byte_fmt.padding_string(byte_number_in_row);
-            out.write_all(padding.as_bytes())
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-        })?;
-        
-        out.write_all(SPACE)
-        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                self.printable_address += buf.len();
+                let padding = self.byte_fmt.padding_string(byte_number_in_row);
+                out.write_all(padding.as_bytes())?;
 
-        out.write_all(&self.decorations.third_column_sep.0[..])
-        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                Ok(())
+            })?;
 
-        let text = self.text_writer.take_result();
-        out.write_all(text.as_bytes())
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            out.write_all(SPACE)?;
 
-    out.write_all(&self.decorations.third_column_sep.1[..])
-        .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            out.write_all(&self.decorations.third_column_sep.0[..])?;
+
+            let text = self.text_writer.take_result();
+            out.write_all(text.as_bytes())?;
+
+            out.write_all(&self.decorations.third_column_sep.1[..])?;
+
+            Ok(())
+        };
 
         self.out = Some(out);
         self.bytes_writer = Some(b_writer);
 
-        Ok(())
+        result
     }
 
-    fn on_row_started(this: Rc<RefCell<&mut Self>>) {
+    fn on_row_started(this: Rc<RefCell<&mut Self>>) -> Result<()> {
         let mut this = this.borrow_mut();
         let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
         let addr_str = this.address_fmt.format(this.printable_address);
-        _ = out
-            .write_all(addr_str.as_bytes())
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-        _ = out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+
+        let result = {
+            out.write_all(addr_str.as_bytes())?;
+            out.write_all(SPACE)?;
+
+            Ok(())
+        };
 
         this.out = Some(out);
+
+        result
     }
 
-    fn on_data_written(this: Rc<RefCell<&mut Self>>, data: &WriteResult) {
+    fn on_data_written(this: Rc<RefCell<&mut Self>>, data: &WriteResult) -> Result<()> {
         let mut this = this.borrow_mut();
         let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
-        match data {
-            WriteResult::Stored(_) => (),
-            WriteResult::ReadyAt(buf, byte_in_row) => {
-                let str = this.byte_fmt.format(&buf[..], *byte_in_row);
-                out.write_all(str.as_bytes())
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        let result = {
+            match data {
+                WriteResult::Stored(_) => Ok(()),
+                WriteResult::ReadyAt(buf, byte_in_row) => {
+                    let str = this.byte_fmt.format(&buf[..], *byte_in_row);
+                    out.write_all(str.as_bytes())?;
 
-                this.text_writer
-                    .write(buf)
-                    .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+                    this.text_writer
+                        .write(buf)?;
+
+                    Ok(())
+                }
             }
-        }
+        };
 
         this.out = Some(out);
+
+        result
     }
 
-    fn on_row_finished(this: Rc<RefCell<&mut Self>>) {
+    fn on_row_finished(this: Rc<RefCell<&mut Self>>) -> Result<()> {
         let mut this = this.borrow_mut();
         let text = this.text_writer.take_result();
 
         let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
         let decor = &this.decorations;
-        out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
-        out.write_all(&decor.third_column_sep.0[..])
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        let result = {
+            out.write_all(SPACE)?;
 
-        out.write_all(text.as_bytes())
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            out.write_all(&decor.third_column_sep.0[..])?;
 
-        out.write_all(&decor.third_column_sep.1[..])
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            out.write_all(text.as_bytes())?;
 
-        out.write_all(ROW_SEPARATOR)
-            .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            out.write_all(&decor.third_column_sep.1[..])?;
+
+            out.write_all(ROW_SEPARATOR)?;
+
+            Ok(())
+        };
 
         this.out = Some(out);
+
+        result
     }
 }
 
