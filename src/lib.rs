@@ -1,6 +1,6 @@
 //! `kex` - library for streamed hex dumping
 
-use std::{cell::RefCell, io::*, pin::Pin, rc::Rc};
+use std::{cell::RefCell, io::*, rc::Rc};
 
 pub mod config;
 pub use config::*;
@@ -15,6 +15,7 @@ const ROW_SEPARATOR: &[u8] = b"\n";
 const SPACE: &[u8] = b" ";
 
 const OUTPUT_LOST_MESSAGE: &str = "Somewhere we lost the output";
+const WRITER_LOST_MESSAGE: &str = "Somewhere we lost the writer";
 const CANNOT_WRITE_OUTPUT_MESSAGE: &str = "Could not write to output";
 
 /// The topmost struct for data output
@@ -27,7 +28,7 @@ pub struct Printer<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFor
 
     address_fmt: A,
     byte_fmt: B,
-    bytes_writer: GrouppedWriter,
+    bytes_writer: Option<GrouppedWriter>,
     text_writer: TextWriter<C>,
 
     decorations: Decorations,
@@ -57,7 +58,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
             printable_address: start_address,
             address_fmt: config.fmt.addr,
             byte_fmt: config.fmt.byte,
-            bytes_writer: GrouppedWriter::new(groupping, byte_order),
+            bytes_writer: Some(GrouppedWriter::new(groupping, byte_order)),
             text_writer: text_write,
             decorations: config.decorations,
         }
@@ -80,8 +81,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
     /// Accepts bytes chunk. Immediately prints `first` and `second` columns to `out`,
     /// `third` will printed after `second` column is completely filled, or after finalization.
     pub fn push(&mut self, bytes: &[u8]) -> Result<usize> {
-        let mut idx = RefCell::new(0);
-        let data_size = bytes.len();
+        let mut b_writer = self.bytes_writer.take().expect(WRITER_LOST_MESSAGE);
 
         let in_ref = Rc::new(RefCell::new(self));
         
@@ -91,18 +91,22 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
             },
             |write_res| {
                 Self::on_data_written(in_ref.clone(), &write_res);
-                *idx.borrow_mut() += write_res.bytes_processed();
             },
             || {
                 Self::on_row_finished(in_ref.clone());
             },
         );
 
-        let tmp = &bytes[*idx.borrow()..];
-        _ = in_ref.borrow_mut().bytes_writer.write(tmp, &mut callbacks).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+        let mut tmp = &bytes[..];
+        while tmp.len() > 0 {
+
+            let written = b_writer.write(tmp, &mut callbacks).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
+            tmp = &tmp[written..];
+        }
+
+        in_ref.borrow_mut().bytes_writer = Some(b_writer);
 
         Ok(bytes.len())
-        
     }
 
     fn print_last_line(&mut self) -> Result<()> {
@@ -111,11 +115,13 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         }
 
         let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+        let mut b_writer = self.bytes_writer.take().expect(WRITER_LOST_MESSAGE);
 
-        self.bytes_writer.flush(|buf| {})?;
+        b_writer.flush(|buf| {})?;
         self.text_writer.flush(&mut out)?;
 
         self.out = Some(out);
+        self.bytes_writer = Some(b_writer);
 
         Ok(())
     }
@@ -124,7 +130,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         let mut this = this.borrow_mut();
         let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
-        let addr_str = this.address_fmt.format(this.bytes_writer.address());
+        let addr_str = this.address_fmt.format(this.printable_address);
         _ = out
             .write_all(addr_str.as_bytes())
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);

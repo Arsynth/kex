@@ -36,12 +36,6 @@ pub(super) struct GrouppedWriter {
 }
 
 impl GrouppedWriter {
-    pub(super) fn address(&self) -> usize {
-        self.address
-    }
-}
-
-impl GrouppedWriter {
     pub(super) fn new(groupping: Groupping, order: ByteOrder) -> Self {
         let buf_size = match order {
             ByteOrder::Strict => groupping.max_group_size(),
@@ -188,7 +182,14 @@ impl<C: CharFormatting> TextWriter<C> {
     }
 
     pub(super) fn flush<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        todo!()
+        if self.avail != 0 {
+            let s = self.fmt.format(&self.buf[..self.avail]);
+            let _ = out.write_all(s.as_bytes())?;
+
+            self.avail = 0;
+        }
+
+        Ok(())
     }
 
     pub(super) fn has_data(&self) -> bool {
