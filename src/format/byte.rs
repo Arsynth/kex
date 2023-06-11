@@ -25,7 +25,19 @@ impl Default for ByteFormatter {
 }
 
 impl ByteFormatting for ByteFormatter {
-    fn format(&mut self, bytes: &[u8], byte_number_in_row: usize) -> String {
+    fn byte_order(&self) -> ByteOrder {
+        if self.is_little_endian {
+            ByteOrder::Strict
+        } else {
+            ByteOrder::Relaxed
+        }
+    }
+
+    fn groupping(&self) -> &Groupping {
+        &self.groupping
+    }
+
+    fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
         let gr = &self.groupping;
 
         if let ByteOrder::Strict = self.byte_order() {
@@ -63,7 +75,7 @@ impl ByteFormatting for ByteFormatter {
         result
     }
 
-    fn padding_string(&mut self, _byte_count: usize, byte_number_in_row: usize) -> String {
+    fn padding_string(&self, _byte_count: usize, byte_number_in_row: usize) -> String {
         let padding = "..";
         let gr = &self.groupping;
         let sep = gr.separator();
@@ -93,21 +105,6 @@ impl ByteFormatting for ByteFormatter {
         result
     }
 }
-
-impl ByteOrdered for ByteFormatter {
-    fn byte_order(&self) -> ByteOrder {
-        if self.is_little_endian {
-            ByteOrder::Strict
-        } else {
-            ByteOrder::Relaxed
-        }
-    }
-
-    fn groupping(&self) -> &Groupping {
-        &self.groupping
-    }
-}
-
 
 #[cfg(test)]
 mod tests {

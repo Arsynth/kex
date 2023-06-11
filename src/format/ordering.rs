@@ -2,13 +2,6 @@ pub const DEFAULT_BYTES_PER_ROW: usize = 16;
 pub const DEFAULT_GROUP_SIZE: usize = 4;
 pub const DEFAULT_NUMBER_OF_GROUPS: usize = 4;
 
-pub trait ByteOrdered {
-    /// Requirement for byte portions passing in the `format(...)` function
-    fn byte_order(&self) -> ByteOrder;
-
-    fn groupping(&self) -> &Groupping;
-}
-
 /// Requirement for providing byte portions
 pub enum ByteOrder {
     /// Bytes will be provided in portions strictly according to grouping.
@@ -19,6 +12,7 @@ pub enum ByteOrder {
 }
 
 /// Byte formatting style
+#[derive(Clone)]
 pub enum Groupping {
     /// Single group with bytes count
     RowWide(usize),
@@ -43,7 +37,7 @@ impl Groupping {
     pub(crate) fn is_aligned_at(&self, number: usize) -> bool {
         let bpr = self.bytes_per_row();
         assert!(
-            bpr >= number,
+            bpr > number,
             "is_aligned_at(): Trying to exceed maximum row length"
         );
 
@@ -66,7 +60,7 @@ impl Groupping {
     pub(crate) fn is_aligned_range(&self, number: usize, len: usize) -> bool {
         let bpr = self.bytes_per_row();
         assert!(
-            bpr >= number + len,
+            bpr > number + len,
             "is_aligned_range(): Trying to exceed maximum row length"
         );
 
@@ -75,7 +69,7 @@ impl Groupping {
             Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
                 let rem = bpr % g.size;
                 if rem == 0 {
-                    number % g.size == 0 && len == g.size
+                    number % g.size == 0 && len % g.size == 0
                 } else {
                     let rem_group = rem;
                     let n_aligned_groups = (bpr - rem_group) / g.size;
@@ -94,24 +88,9 @@ impl Groupping {
         }
     }
 
-    pub(crate) fn number_of_groups(&self) -> usize {
-        match self {
-            Groupping::RowWide(_) => 1,
-            Groupping::RepeatingGroup(_, rep) => *rep,
-            Groupping::BytesPerRow(r, g) => {
-                let rem = r % g.size;
-                if rem == 0 {
-                    r / g.size
-                } else {
-                    (r - rem) / g.size + 1
-                }
-            }
-        }
-    }
-
     pub(crate) fn group_of_byte(&self, number: usize) -> usize {
         assert!(
-            self.bytes_per_row() >= number,
+            self.bytes_per_row() > number,
             "group_of_byte():Trying to exceed maximum row length"
         );
         match self {
@@ -137,6 +116,22 @@ impl Groupping {
             }
         }
     }
+
+    pub(crate) fn max_group_size(&self) -> usize {
+        match self {
+            Groupping::RowWide(r) => *r,
+            Groupping::RepeatingGroup(g, _) => g.size,
+            Groupping::BytesPerRow(_, g) => g.size,
+        }
+    }
+
+    pub(crate) fn byte_number_in_group(&self, number_in_row: usize) -> usize {
+        assert!(
+            self.bytes_per_row() > number_in_row,
+            "byte_number_in_group(): Trying to exceed maximum row length"
+        );
+        number_in_row % self.max_group_size()
+    }
 }
 
 impl Default for Groupping {
@@ -145,6 +140,7 @@ impl Default for Groupping {
     }
 }
 
+#[derive(Clone)]
 pub struct Group {
     /// Number of bytes in the group
     pub(super) size: usize,

@@ -4,17 +4,17 @@ use std::cmp::min;
 pub mod byte;
 pub use byte::*;
 
-pub mod groupping;
-pub use groupping::*;
+pub mod ordering;
+pub use ordering::*;
 
 /// Formatters for address (first column), bytes (second column), and text (third column)
-pub struct Formatters<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> {
+pub struct Formatters<A: AddressFormatting, B: ByteFormatting, T: CharFormatting> {
     pub(super) addr: A,
     pub(super) byte: B,
     pub(super) text: T,
 }
 
-impl<A: AddressFormatting, B: ByteFormatting, T: ByteFormatting> Formatters<A, B, T> {
+impl<A: AddressFormatting, B: ByteFormatting, T: CharFormatting> Formatters<A, B, T> {
     pub fn new(addr: A, byte: B, text: T) -> Self {
         Self { addr, byte, text }
     }
@@ -27,11 +27,22 @@ pub trait AddressFormatting {
 
 /// Used for bytes formatting (both for `second` and `third` columns)
 pub trait ByteFormatting {
+    /// Requirement for byte portions passing in the `format(...)` function
+    fn byte_order(&self) -> ByteOrder {
+        ByteOrder::Strict
+    }
+
+    fn groupping(&self) -> &Groupping;
+
+    fn bytes_per_row(&self) -> usize {
+        self.groupping().bytes_per_row()
+    }
+
     /// `bytes` - bytes to convert to `String`
     ///
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
-    fn format(&mut self, bytes: &[u8], byte_number_in_row: usize) -> String;
+    fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String;
 
     /// When writing data chunks to [`super::Printer`] is finished, last output line may be incomplete.
     /// This function should provide spacing string for incomplete row
@@ -46,7 +57,12 @@ pub trait ByteFormatting {
     ///
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
-    fn padding_string(&mut self, byte_count: usize, byte_number_in_row: usize) -> String;
+    fn padding_string(&self, byte_count: usize, byte_number_in_row: usize) -> String;
+}
+
+pub trait CharFormatting {
+    fn format(&mut self, bytes: &[u8]) -> String;
+    fn padding_string(&mut self, byte_count: usize) -> String;
 }
 
 /// Builtin address formatter
@@ -89,8 +105,8 @@ impl Default for CharFormatter {
     }
 }
 
-impl ByteFormatting for CharFormatter {
-    fn format(&mut self, bytes: &[u8], _byte_number_in_row: usize) -> String {
+impl CharFormatting for CharFormatter {
+    fn format(&mut self, bytes: &[u8]) -> String {
         let placeholder = &self.placeholder;
         let strs: Vec<String> = bytes
             .iter()
@@ -108,7 +124,7 @@ impl ByteFormatting for CharFormatter {
         strs.join("")
     }
 
-    fn padding_string(&mut self, byte_count: usize, _byte_number_in_row: usize) -> String {
+    fn padding_string(&mut self, byte_count: usize) -> String {
         " ".repeat(byte_count)
     }
 }
