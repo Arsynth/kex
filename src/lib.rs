@@ -1,6 +1,6 @@
 //! `kex` - library for streamed hex dumping
 
-use std::io::*;
+use std::{cell::RefCell, io::*, pin::Pin, rc::Rc};
 
 pub mod config;
 pub use config::*;
@@ -80,28 +80,29 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
     /// Accepts bytes chunk. Immediately prints `first` and `second` columns to `out`,
     /// `third` will printed after `second` column is completely filled, or after finalization.
     pub fn push(&mut self, bytes: &[u8]) -> Result<usize> {
-        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+        let mut idx = RefCell::new(0);
+        let data_size = bytes.len();
 
-        let mut tmp = bytes;
-        let mut b_writer = self.bytes_writer;
-
-        let callbacks = Callbacks::new(
+        let in_ref = Rc::new(RefCell::new(self));
+        
+        let mut callbacks = Callbacks::new(
             || {
-                self.on_row_started();
+                Self::on_row_started(in_ref.clone());
             },
             |write_res| {
-                self.on_data_written(&write_res);
-
-                tmp = &tmp[write_res.bytes_processed()..];
+                Self::on_data_written(in_ref.clone(), &write_res);
+                *idx.borrow_mut() += write_res.bytes_processed();
             },
             || {
-                self.on_row_finished();
+                Self::on_row_finished(in_ref.clone());
             },
         );
 
-        self.out = Some(out);
+        let tmp = &bytes[*idx.borrow()..];
+        _ = in_ref.borrow_mut().bytes_writer.write(tmp, &mut callbacks).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
         Ok(bytes.len())
+        
     }
 
     fn print_last_line(&mut self) -> Result<()> {
@@ -119,39 +120,42 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         Ok(())
     }
 
-    fn on_row_started(&mut self) {
-        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+    fn on_row_started(this: Rc<RefCell<&mut Self>>) {
+        let mut this = this.borrow_mut();
+        let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
-        let addr_str = self.address_fmt.format(self.bytes_writer.address());
+        let addr_str = this.address_fmt.format(this.bytes_writer.address());
         _ = out
             .write_all(addr_str.as_bytes())
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
-        self.out = Some(out);
+        this.out = Some(out);
     }
 
-    fn on_data_written(&mut self, data: &WriteResult) {
-        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+    fn on_data_written(this: Rc<RefCell<&mut Self>>, data: &WriteResult) {
+        let mut this = this.borrow_mut();
+        let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
         match data {
             WriteResult::Stored(_) => (),
             WriteResult::ReadyAt(buf, byte_in_row) => {
-                let str = self.byte_fmt.format(&buf[..], *byte_in_row);
+                let str = this.byte_fmt.format(&buf[..], *byte_in_row);
                 out.write_all(str.as_bytes())
                     .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
-                self.text_writer
+                this.text_writer
                     .write(buf, &mut out)
                     .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
             }
         }
 
-        self.out = Some(out);
+        this.out = Some(out);
     }
 
-    fn on_row_finished(&mut self) {
-        let mut out = self.out.take().expect(OUTPUT_LOST_MESSAGE);
+    fn on_row_finished(this: Rc<RefCell<&mut Self>>) {
+        let mut this = this.borrow_mut();
+        let mut out = this.out.take().expect(OUTPUT_LOST_MESSAGE);
 
-        let decor = &self.decorations;
+        let decor = &this.decorations;
         out.write_all(SPACE).expect(CANNOT_WRITE_OUTPUT_MESSAGE);
         out.write_all(&decor.third_column_sep.0[..])
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
@@ -160,7 +164,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
         out.write_all(ROW_SEPARATOR)
             .expect(CANNOT_WRITE_OUTPUT_MESSAGE);
 
-        self.out = Some(out);
+        this.out = Some(out);
     }
 }
 
