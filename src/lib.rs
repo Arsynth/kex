@@ -176,7 +176,10 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
 
         let result = {
             match data {
-                WriteResult::Stored(_) => Ok(()),
+                WriteResult::Stored(st) => {
+                    this.printable_address += st;
+                    Ok(())
+                },
                 WriteResult::ReadyAt(buf, byte_in_row) => {
                     let str = this.byte_fmt.format(&buf[..], *byte_in_row);
                     out.write_all(str.as_bytes())?;
@@ -184,6 +187,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
                     this.text_writer
                         .write(buf)?;
 
+                    this.printable_address += buf.len();
                     Ok(())
                 }
             }

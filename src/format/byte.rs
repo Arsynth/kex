@@ -40,13 +40,6 @@ impl ByteFormatting for ByteFormatter {
     fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
         let gr = &self.groupping;
 
-        if let ByteOrder::Strict = self.byte_order() {
-            assert!(
-                gr.is_aligned_range(byte_number_in_row, bytes.len()),
-                "ByteOrder::Strict require that provided bytes are aligned to groups"
-            );
-        }
-
         let mut result = String::new();
 
         let sep = gr.separator();

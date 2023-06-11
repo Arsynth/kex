@@ -60,7 +60,7 @@ impl Groupping {
     pub(crate) fn is_aligned_range(&self, number: usize, len: usize) -> bool {
         let bpr = self.bytes_per_row();
         assert!(
-            bpr > number + len,
+            bpr >= number + len,
             "is_aligned_range(): Trying to exceed maximum row length"
         );
 

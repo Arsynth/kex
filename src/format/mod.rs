@@ -28,9 +28,7 @@ pub trait AddressFormatting {
 /// Used for bytes formatting (both for `second` and `third` columns)
 pub trait ByteFormatting {
     /// Requirement for byte portions passing in the `format(...)` function
-    fn byte_order(&self) -> ByteOrder {
-        ByteOrder::Strict
-    }
+    fn byte_order(&self) -> ByteOrder;
 
     fn groupping(&self) -> Groupping;
 
