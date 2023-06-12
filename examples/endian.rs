@@ -23,7 +23,7 @@ fn print_data_per_byte(data: &[u8], is_little_endian: bool) {
     use std::io::stdout;
 
     let config = Config::new(
-        Some(AddressFormatter::new(16, Default::default())),
+        Some(AddressFormatter::new(AddressStyle::Hex(16), Default::default())),
         ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(GROUP_SIZE, "-"), NUM_OF_GROUPS),
             is_little_endian,

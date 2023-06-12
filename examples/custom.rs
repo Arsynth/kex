@@ -5,7 +5,7 @@ fn main() {
     use std::io::stdout;
 
     let config = Config::new(
-        Some(MyAddrFormatter::new()),
+        Some(AddressFormatter::new(AddressStyle::Hex(8), Separators::new("", &'\u{1F929}'.to_string()))),
         MyByteFormatter::new(),
         Some(CharFormatter::new(
             ".".to_string(),
@@ -31,29 +31,6 @@ fn main() {
     }
 
     printer.finish();
-}
-
-#[derive(Clone)]
-struct MyAddrFormatter {
-    fmt: AddressFormatter,
-}
-
-impl MyAddrFormatter {
-    fn new() -> Self {
-        MyAddrFormatter {
-            fmt: AddressFormatter::new(8, Separators::new("", &'\u{1F929}'.to_string())),
-        }
-    }
-}
-
-impl AddressFormatting for MyAddrFormatter {
-    fn format(&self, addr: usize) -> String {
-        self.fmt.format(addr)
-    }
-
-    fn separators(&self) -> &Separators {
-        self.fmt.separators()
-    }
 }
 
 #[derive(Clone)]
