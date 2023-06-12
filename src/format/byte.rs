@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_unordered() {
-        let fmt = ByteFormatter::new(Groupping::BytesPerRow(4, Group::new(4, "")), false);
+        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, ""), 1), false);
         let cases = vec![Case::new(
             vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],
             "feedface",
@@ -148,7 +148,7 @@ mod tests {
             case.run(&fmt);
         }
 
-        let fmt = ByteFormatter::new(Groupping::BytesPerRow(8, Group::new(4, " ")), false);
+        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 2), false);
         let cases = vec![
             Case::new(
                 vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],

@@ -18,11 +18,6 @@ pub enum Groupping {
     RowWide(usize),
     /// Group with repeat count. `bytes per row` = `group size` * `number of groups`
     RepeatingGroup(Group, usize),
-    /// Number of bytes in row does not depend on group size, it is specified directly.
-    ///
-    /// ## Note
-    /// If the bytes per row is not aligned to group size, last group will be incomplete sized
-    BytesPerRow(usize, Group),
 }
 
 impl Groupping {
@@ -30,7 +25,6 @@ impl Groupping {
         match self {
             Groupping::RowWide(_) => "".to_string(),
             Groupping::RepeatingGroup(g, _) => g.separator.clone(),
-            Groupping::BytesPerRow(_, g) => g.separator.clone(),
         }
     }
 
@@ -43,17 +37,7 @@ impl Groupping {
 
         match self {
             Groupping::RowWide(_) => number == 0,
-            Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
-                let rem = bpr % g.size;
-                if rem == 0 {
-                    number % g.size == 0
-                } else {
-                    let rem_group = rem;
-                    let n_aligned_groups = (bpr - rem_group) / g.size;
-
-                    number == n_aligned_groups * g.size
-                }
-            }
+            Groupping::RepeatingGroup(g, _) => number % g.size == 0,
         }
     }
 
@@ -61,7 +45,6 @@ impl Groupping {
         match self {
             Groupping::RowWide(r) => *r,
             Groupping::RepeatingGroup(g, rep) => g.size * rep,
-            Groupping::BytesPerRow(r, _) => *r,
         }
     }
 
@@ -72,7 +55,7 @@ impl Groupping {
         );
         match self {
             Groupping::RowWide(_) => 0,
-            Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
+            Groupping::RepeatingGroup(g, _) => {
                 let group_size = g.size;
                 let rem = number % group_size;
                 (number - rem) / group_size
@@ -87,7 +70,7 @@ impl Groupping {
         );
         match self {
             Groupping::RowWide(r) => r - number,
-            Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
+            Groupping::RepeatingGroup(g, _) => {
                 let group_num = self.group_of_byte(number);
                 g.size - (number - g.size * group_num)
             }
@@ -98,7 +81,6 @@ impl Groupping {
         match self {
             Groupping::RowWide(r) => *r,
             Groupping::RepeatingGroup(g, _) => g.size,
-            Groupping::BytesPerRow(_, g) => g.size,
         }
     }
 
