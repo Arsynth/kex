@@ -5,7 +5,7 @@ fn main() {
     use std::io::stdout;
 
     let config = Config::new(
-        Some(AddressFormatter::new(AddressStyle::Hex(8), Separators::new("", &'\u{1F929}'.to_string()))),
+        Some(AddressFormatter::new(AddressStyle::Dec(8), Separators::new("", &'\u{1F929}'.to_string()))),
         MyByteFormatter::new(),
         Some(CharFormatter::new(
             ".".to_string(),

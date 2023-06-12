@@ -27,7 +27,7 @@ impl AddressFormatting for AddressFormatter {
     fn format(&self, addr: usize) -> String {
         match self.style {
             AddressStyle::Dec(w) => {
-                format!("{:0width$}", addr, width = w)
+                format!("{:width$}", addr, width = w)
             },
             AddressStyle::Hex(w) => {
                 format!("{:0width$x}", addr, width = w)
