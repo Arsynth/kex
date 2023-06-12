@@ -148,10 +148,21 @@ impl<
 
         let result = {
             b_writer.flush(|buf, byte_number_in_row| {
+                if let Some(address_fmt) = &self.address_fmt {
+                    let addr_str = address_fmt.format(self.printable_address);
+    
+                    out.write_all(&address_fmt.separators().trailing)?;
+    
+                    out.write_all(addr_str.as_bytes())?;
+    
+                    out.write_all(&address_fmt.separators().leaidng)?;
+                }
+
+                self.printable_address += buf.len();
+
                 let last = self.byte_fmt.format(buf, byte_number_in_row - buf.len());
                 out.write_all(last.as_bytes())?;
 
-                self.printable_address += buf.len();
                 let padding = self.byte_fmt.padding_string(byte_number_in_row);
                 out.write_all(padding.as_bytes())?;
 
