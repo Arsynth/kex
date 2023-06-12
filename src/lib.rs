@@ -178,8 +178,7 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
 
         let result = {
             match data {
-                WriteResult::Stored(st) => {
-                    this.printable_address += st;
+                WriteResult::Stored(_) => {
                     Ok(())
                 },
                 WriteResult::ReadyAt(buf, byte_in_row) => {

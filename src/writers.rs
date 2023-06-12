@@ -97,7 +97,8 @@ impl GrouppedWriter {
                     let is_row_finished = byte_in_row + fill_count == bpr;
 
                     if self.avail == gr.max_group_size() || is_row_finished {
-                        (callbacks.write_row_cb)(WriteResult::ReadyAt(&buf_to_read[..], byte_in_row))?;
+                        let start_byte = byte_in_row + fill_count - self.avail;
+                        (callbacks.write_row_cb)(WriteResult::ReadyAt(&back_buf[..], start_byte))?;
 
                         if is_row_finished {
                             (callbacks.finish_row_cb)()?;
@@ -105,8 +106,8 @@ impl GrouppedWriter {
 
                         self.avail = 0;
 
-                        self.address += back_buf.len();
-                        Ok(back_buf.len())
+                        self.address += fill_count;
+                        Ok(fill_count)
                     } else {
                         (callbacks.write_row_cb)(WriteResult::Stored(fill_count))?;
 
