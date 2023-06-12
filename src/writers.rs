@@ -87,6 +87,7 @@ impl GrouppedWriter {
                     let remaining = gr.bytes_left_in_group_after(byte_in_row);
                     let byte_in_group = gr.byte_number_in_group(byte_in_row);
                     let fill_count = min(remaining, buf.len());
+                    self.avail += fill_count;
 
                     let mut buf_to_read = &mut back_buf[byte_in_group..byte_in_group + fill_count];
                     let mut buf = &buf[..];
@@ -95,12 +96,14 @@ impl GrouppedWriter {
 
                     let is_row_finished = byte_in_row + fill_count == bpr;
 
-                    if byte_in_group + fill_count == gr.max_group_size() || is_row_finished {
-                        (callbacks.write_row_cb)(WriteResult::ReadyAt(&back_buf[..], byte_in_row))?;
+                    if self.avail == gr.max_group_size() || is_row_finished {
+                        (callbacks.write_row_cb)(WriteResult::ReadyAt(&buf_to_read[..], byte_in_row))?;
 
                         if is_row_finished {
                             (callbacks.finish_row_cb)()?;
                         }
+
+                        self.avail = 0;
 
                         self.address += back_buf.len();
                         Ok(back_buf.len())

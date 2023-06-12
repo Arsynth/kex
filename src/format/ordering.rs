@@ -57,29 +57,6 @@ impl Groupping {
         }
     }
 
-    pub(crate) fn is_aligned_range(&self, number: usize, len: usize) -> bool {
-        let bpr = self.bytes_per_row();
-        assert!(
-            bpr >= number + len,
-            "is_aligned_range(): Trying to exceed maximum row length"
-        );
-
-        match self {
-            Groupping::RowWide(_) => number == 0 && len == bpr,
-            Groupping::RepeatingGroup(g, _) | Groupping::BytesPerRow(_, g) => {
-                let rem = bpr % g.size;
-                if rem == 0 {
-                    number % g.size == 0 && len % g.size == 0
-                } else {
-                    let rem_group = rem;
-                    let n_aligned_groups = (bpr - rem_group) / g.size;
-
-                    number == n_aligned_groups * g.size && len == rem_group
-                }
-            }
-        }
-    }
-
     pub(crate) fn bytes_per_row(&self) -> usize {
         match self {
             Groupping::RowWide(r) => *r,

@@ -131,6 +131,8 @@ impl<O: Write, A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Print
                 let padding = self.byte_fmt.padding_string(byte_number_in_row);
                 out.write_all(padding.as_bytes())?;
 
+                self.text_writer.write(buf)?;
+
                 Ok(())
             })?;
 
