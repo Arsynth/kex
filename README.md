@@ -3,7 +3,7 @@
 Streamed hex dumping library.
 
 # Features
-* Streamed I/O.
+* Streamed I/O. [See the demo in asciinema](https://asciinema.org/a/591057)
 * Works with output, implementing `Write` trait.
 * Customizable formatting
 
@@ -46,18 +46,17 @@ fn main() {
 See all the examples in `examples` directory in the crate root
 
 # Documentation
-https://docs.rs/kex/0.1.7/kex/
+https://docs.rs/kex/0.1.8/kex/
 
 # Customized formatting
 ```
-00000000🤩 deadbe efdead beefde 💥.........💨
-00000009🤩 adbeef deadbe efdead 💥.........💨
-00000012🤩 beefde adbeef deadbe 💥.........💨
-0000001b🤩 efdead beefde adbeef 💥.........💨
-00000024🤩 deadbe ef4974 20776f 💥....It wo💨
-0000002d🤩 726b73 212121 feedfa 💥rks!!!...💨
-00000036🤩 feedfa feedfa feedfa 💥.........💨
-0000003f🤩 feedfa feedfa feedfa 💥.........💨
-00000048🤩 feedfa feedfa feedfa 💥.........💨
-00000051🤩 feedfa XxXxXx XxXxXx 💥...      💨
+       0🤩deadbeef#deadbeef#deadbeef#deadbeef 💥................💨
+      16🤩deadbeef#deadbeef#deadbeef#deadbeef 💥................💨
+      32🤩deadbeef#deadbeef#49742077#6f726b73 💥........It works💨
+      48🤩212121fe#edfafeed#fafeedfa#feedfafe 💥!!!.............💨
+      64🤩edfafeed#fafeedfa#feedfafe#edfafeed 💥................💨
+      80🤩fafeedfa#........#........#........ 💥....            💨
 ```
+
+# Bug reports or feature requests
+https://github.com/Arsynth/kex/issues

@@ -1,6 +1,6 @@
 //! Example of strict groupping
 
-use std::io::Write;
+use std::{io::Write, thread, time::Duration};
 
 use kex::*;
 
@@ -36,9 +36,15 @@ fn print_data_per_byte(data: &[u8], is_little_endian: bool) {
 
     
     for s in data {
+        // Just for demonstration
+        thread::sleep(Duration::from_millis(250));
+
         assert!(printer
             .write(&[*s])
             .is_ok());
+        
+        // Just for demonstration
+        _ = stdout().flush();
     }
 
     _ = printer.finish();
