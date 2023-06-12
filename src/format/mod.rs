@@ -7,22 +7,11 @@ pub use byte::*;
 pub mod ordering;
 pub use ordering::*;
 
-/// Formatters for address (first column), bytes (second column), and text (third column)
-pub struct Formatters<A: AddressFormatting, B: ByteFormatting, T: CharFormatting> {
-    pub(super) addr: A,
-    pub(super) byte: B,
-    pub(super) text: T,
-}
-
-impl<A: AddressFormatting, B: ByteFormatting, T: CharFormatting> Formatters<A, B, T> {
-    pub fn new(addr: A, byte: B, text: T) -> Self {
-        Self { addr, byte, text }
-    }
-}
-
 /// Used for address formatting (`first` column)
 pub trait AddressFormatting {
     fn format(&self, addr: usize) -> String;
+
+    fn separators(&self) -> &Separators;
 }
 
 /// Used for bytes formatting (both for `second` and `third` columns)
@@ -56,27 +45,36 @@ pub trait ByteFormatting {
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
     fn padding_string(&self, byte_number_in_row: usize) -> String;
+
+    fn separators(&self) -> &Separators;
 }
 
 pub trait CharFormatting {
     fn format(&mut self, bytes: &[u8]) -> String;
     fn padding_string(&mut self, byte_count: usize) -> String;
+
+    fn separators(&self) -> &Separators;
 }
 
 /// Builtin address formatter
+#[derive(Clone)]
 pub struct AddressFormatter {
     min_width: usize,
+    pub(super) separators: Separators,
 }
 
 impl AddressFormatter {
-    pub fn new(min_width: usize) -> AddressFormatter {
-        Self { min_width }
+    pub fn new(min_width: usize, separators: Separators) -> AddressFormatter {
+        Self {
+            min_width,
+            separators,
+        }
     }
 }
 
 impl Default for AddressFormatter {
     fn default() -> Self {
-        Self { min_width: 8 }
+        Self { min_width: 8, separators: Default::default() }
     }
 }
 
@@ -84,22 +82,25 @@ impl AddressFormatting for AddressFormatter {
     fn format(&self, addr: usize) -> String {
         format!("{:0width$x}", addr, width = self.min_width)
     }
-}
 
-/// Builtin byte formatter (used for `third` column by default)
-pub struct CharFormatter {
-    placeholder: String,
-}
-
-impl CharFormatter {
-    pub fn new(placeholder: String) -> Self {
-        Self { placeholder }
+    fn separators(&self) -> &Separators {
+        &self.separators
     }
 }
 
-impl Default for CharFormatter {
-    fn default() -> Self {
-        Self::new(".".to_string())
+/// Builtin byte formatter (used for `third` column by default)
+#[derive(Clone)]
+pub struct CharFormatter {
+    placeholder: String,
+    pub(super) separators: Separators,
+}
+
+impl CharFormatter {
+    pub fn new(placeholder: String, separators: Separators) -> Self {
+        Self {
+            placeholder,
+            separators,
+        }
     }
 }
 
@@ -124,5 +125,39 @@ impl CharFormatting for CharFormatter {
 
     fn padding_string(&mut self, byte_count: usize) -> String {
         " ".repeat(byte_count)
+    }
+
+    fn separators(&self) -> &Separators {
+        &self.separators
+    }
+}
+
+impl Default for CharFormatter {
+    fn default() -> Self {
+        Self::new(".".to_string(), Separators::new("|", "|"))
+    }
+}
+
+#[derive(Clone)]
+pub struct Separators {
+    pub(crate) trailing: Vec<u8>,
+    pub(crate) leaidng: Vec<u8>,
+}
+
+impl Separators {
+    pub fn new(trailing: &str, leaidng: &str) -> Self {
+        Self {
+            leaidng: Vec::from(leaidng),
+            trailing: Vec::from(trailing),
+        }
+    }
+}
+
+impl Default for Separators {
+    fn default() -> Self {
+        Self {
+            leaidng: Vec::from(" "),
+            trailing: Default::default(),
+        }
     }
 }

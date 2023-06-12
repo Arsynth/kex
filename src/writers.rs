@@ -190,18 +190,22 @@ impl<C: CharFormatting> TextWriter<C> {
     }
 
     pub(super) fn take_result(&mut self) -> String {
-        let mut result = (&self.result).to_string();
+
+        let mut result = String::new();
+        let tr_sep = std::str::from_utf8(&self.fmt.separators().trailing).unwrap();
+        result += tr_sep;
+
+        result += &self.result;
 
         let tail = self.fmt.padding_string(self.max_bytes - self.avail);
         result += &tail;
+
+        let le_sep = std::str::from_utf8(&self.fmt.separators().leaidng).unwrap();
+        result += le_sep;
 
         self.result = String::new();
         self.avail = 0;
 
         result
-    }
-
-    pub(super) fn has_data(&self) -> bool {
-        self.avail > 0
     }
 }

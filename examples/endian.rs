@@ -22,15 +22,15 @@ fn main() {
 fn print_data_per_byte(data: &[u8], is_little_endian: bool) {
     use std::io::stdout;
 
-    let fmt = Formatters::new(
-        AddressFormatter::new(16),
+    let config = Config::new(
+        Some(AddressFormatter::new(16, Default::default())),
         ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(GROUP_SIZE, "-"), NUM_OF_GROUPS),
             is_little_endian,
+            Default::default()
         ),
-        CharFormatter::default(),
+        Some(CharFormatter::default()),
     );
-    let config = Config::new(fmt, Decorations::default());
 
     let mut printer = Printer::new(Box::new(stdout()), 0 as usize, config);
 
@@ -39,7 +39,6 @@ fn print_data_per_byte(data: &[u8], is_little_endian: bool) {
         assert!(printer
             .write(&[*s])
             .is_ok());
-
     }
 
     _ = printer.finish();

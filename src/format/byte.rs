@@ -1,16 +1,20 @@
 use super::*;
 
 /// Builtin byte formatter (used for `second` column by default)
+#[derive(Clone)]
 pub struct ByteFormatter {
     pub(super) groupping: Groupping,
     pub(super) is_little_endian: bool,
+
+    pub(super) separators: Separators,
 }
 
 impl ByteFormatter {
-    pub fn new(groupping: Groupping, is_little_endian: bool) -> Self {
+    pub fn new(groupping: Groupping, is_little_endian: bool, separators: Separators) -> Self {
         Self {
             groupping,
             is_little_endian,
+            separators,
         }
     }
 }
@@ -20,6 +24,7 @@ impl Default for ByteFormatter {
         Self {
             groupping: Default::default(),
             is_little_endian: false,
+            separators: Default::default(),
         }
     }
 }
@@ -102,6 +107,10 @@ impl ByteFormatting for ByteFormatter {
 
         result
     }
+
+    fn separators(&self) -> &Separators {
+        &self.separators
+    }
 }
 
 #[cfg(test)]
@@ -139,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_unordered() {
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, ""), 1), false);
+        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, ""), 1), false, Default::default());
         let cases = vec![Case::new(
             vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],
             "feedface",
@@ -148,7 +157,7 @@ mod tests {
             case.run(&fmt);
         }
 
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 2), false);
+        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 2), false, Default::default());
         let cases = vec![
             Case::new(
                 vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],
@@ -176,7 +185,7 @@ mod tests {
             case.run(&fmt);
         }
 
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, "-"), 4), true);
+        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, "-"), 4), true, Default::default());
         let cases = vec![
             Case::new(
                 vec![vec![
