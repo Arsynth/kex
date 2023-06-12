@@ -1,8 +1,14 @@
 use ascii::*;
 use std::cmp::min;
 
-pub mod byte;
-pub use byte::*;
+pub mod address_fmt;
+pub use address_fmt::*;
+
+pub mod byte_fmt;
+pub use byte_fmt::*;
+
+pub mod char_fmt;
+pub use char_fmt::*;
 
 pub mod ordering;
 pub use ordering::*;
@@ -54,88 +60,6 @@ pub trait CharFormatting {
     fn padding_string(&mut self, byte_count: usize) -> String;
 
     fn separators(&self) -> &Separators;
-}
-
-/// Builtin address formatter
-#[derive(Clone)]
-pub struct AddressFormatter {
-    min_width: usize,
-    pub(super) separators: Separators,
-}
-
-impl AddressFormatter {
-    pub fn new(min_width: usize, separators: Separators) -> AddressFormatter {
-        Self {
-            min_width,
-            separators,
-        }
-    }
-}
-
-impl Default for AddressFormatter {
-    fn default() -> Self {
-        Self { min_width: 8, separators: Default::default() }
-    }
-}
-
-impl AddressFormatting for AddressFormatter {
-    fn format(&self, addr: usize) -> String {
-        format!("{:0width$x}", addr, width = self.min_width)
-    }
-
-    fn separators(&self) -> &Separators {
-        &self.separators
-    }
-}
-
-/// Builtin byte formatter (used for `third` column by default)
-#[derive(Clone)]
-pub struct CharFormatter {
-    placeholder: String,
-    pub(super) separators: Separators,
-}
-
-impl CharFormatter {
-    pub fn new(placeholder: String, separators: Separators) -> Self {
-        Self {
-            placeholder,
-            separators,
-        }
-    }
-}
-
-impl CharFormatting for CharFormatter {
-    fn format(&mut self, bytes: &[u8]) -> String {
-        let placeholder = &self.placeholder;
-        let strs: Vec<String> = bytes
-            .iter()
-            .map(|b| match AsciiChar::from_ascii(*b) {
-                Ok(chr) => {
-                    if chr.is_ascii_printable() && !chr.is_ascii_control() {
-                        chr.to_string()
-                    } else {
-                        placeholder.clone()
-                    }
-                }
-                Err(_) => placeholder.clone(),
-            })
-            .collect();
-        strs.join("")
-    }
-
-    fn padding_string(&mut self, byte_count: usize) -> String {
-        " ".repeat(byte_count)
-    }
-
-    fn separators(&self) -> &Separators {
-        &self.separators
-    }
-}
-
-impl Default for CharFormatter {
-    fn default() -> Self {
-        Self::new(".".to_string(), Separators::new("|", "|"))
-    }
 }
 
 #[derive(Clone)]
