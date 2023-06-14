@@ -1,16 +1,18 @@
+use std::{fmt::Display, io::Read};
+
 use super::*;
 
 /// Builtin byte formatter (used for `third` column by default)
 #[derive(Clone)]
 pub struct CharFormatter {
-    placeholder: String,
+    placeholder: Vec<u8>,
     pub(super) separators: Separators,
 }
 
 impl CharFormatter {
-    pub fn new(placeholder: String, separators: Separators) -> Self {
+    pub fn new(placeholder: impl Display, separators: Separators) -> Self {
         Self {
-            placeholder,
+            placeholder: Vec::from(placeholder.to_string().as_bytes()),
             separators,
         }
     }
@@ -18,21 +20,34 @@ impl CharFormatter {
 
 impl CharFormatting for CharFormatter {
     fn format(&mut self, bytes: &[u8]) -> String {
-        let placeholder = &self.placeholder;
-        let strs: Vec<String> = bytes
-            .iter()
-            .map(|b| match AsciiChar::from_ascii(*b) {
+        use std::str::from_utf8;
+
+        let placeholder = &self.placeholder[..];
+        let placeholder_len = placeholder.len();
+
+        let mut result = vec![0u8; bytes.len() * self.placeholder.len()];
+        let mut result_len = 0;
+
+        for i in 0..bytes.len() {
+            let mut placeholder = &placeholder[..];
+            match AsciiChar::from_ascii(bytes[i]) {
                 Ok(chr) => {
                     if chr.is_ascii_printable() && !chr.is_ascii_control() {
-                        chr.to_string()
+                        result[i] = bytes[i];
+                        result_len += 1;
                     } else {
-                        placeholder.clone()
+                        _ = placeholder.read_exact(&mut result[i..i + placeholder.len()]);
+                        result_len += placeholder_len;
                     }
                 }
-                Err(_) => placeholder.clone(),
-            })
-            .collect();
-        strs.join("")
+                Err(_) => {
+                    _ = placeholder.read_exact(&mut result[i..i + placeholder.len()]);
+                    result_len += placeholder_len;
+                }
+            }
+        }
+
+        unsafe { std::str::from_utf8_unchecked(&result[..result_len]) }.to_string()
     }
 
     fn padding_string(&mut self, byte_count: usize) -> String {
