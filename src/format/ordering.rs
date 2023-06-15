@@ -21,9 +21,9 @@ pub enum Groupping {
 }
 
 impl Groupping {
-    pub(crate) fn separator(&self) -> String {
+    pub(crate) fn separator(&self) -> Vec<u8> {
         match self {
-            Groupping::RowWide(_) => "".to_string(),
+            Groupping::RowWide(_) => vec![],
             Groupping::RepeatingGroup(g, _) => g.separator.clone(),
         }
     }
@@ -91,6 +91,13 @@ impl Groupping {
         );
         number_in_row % self.max_group_size()
     }
+
+    pub(crate) fn number_of_groups(&self) -> usize {
+        match self {
+            Groupping::RowWide(_) => 1,
+            Groupping::RepeatingGroup(_, rep) => *rep,
+        }
+    }
 }
 
 impl Default for Groupping {
@@ -103,14 +110,14 @@ impl Default for Groupping {
 pub struct Group {
     /// Number of bytes in the group
     pub(super) size: usize,
-    pub(super) separator: String,
+    pub(super) separator: Vec<u8>,
 }
 
 impl Group {
     pub fn new(size: usize, separator: &str) -> Self {
         Self {
             size,
-            separator: separator.to_string(),
+            separator: Vec::from(separator.as_bytes()),
         }
     }
 }

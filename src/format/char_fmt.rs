@@ -20,7 +20,7 @@ impl CharFormatter {
 
 impl CharFormatting for CharFormatter {
     fn format(&mut self, bytes: &[u8]) -> String {
-        use std::str::from_utf8;
+        use std::str::from_utf8_unchecked;
 
         let placeholder = &self.placeholder[..];
         let placeholder_len = placeholder.len();
@@ -33,21 +33,21 @@ impl CharFormatting for CharFormatter {
             match AsciiChar::from_ascii(bytes[i]) {
                 Ok(chr) => {
                     if chr.is_ascii_printable() && !chr.is_ascii_control() {
-                        result[i] = bytes[i];
+                        result[result_len] = bytes[i];
                         result_len += 1;
                     } else {
-                        _ = placeholder.read_exact(&mut result[i..i + placeholder.len()]);
+                        _ = placeholder.read_exact(&mut result[result_len..result_len + placeholder.len()]);
                         result_len += placeholder_len;
                     }
                 }
                 Err(_) => {
-                    _ = placeholder.read_exact(&mut result[i..i + placeholder.len()]);
+                    _ = placeholder.read_exact(&mut result[result_len..result_len + placeholder.len()]);
                     result_len += placeholder_len;
                 }
             }
         }
 
-        unsafe { std::str::from_utf8_unchecked(&result[..result_len]) }.to_string()
+        unsafe { from_utf8_unchecked(&result[..result_len]) }.to_string()
     }
 
     fn padding_string(&mut self, byte_count: usize) -> String {

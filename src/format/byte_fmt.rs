@@ -1,4 +1,8 @@
+use std::{io::{Read, Write}, fmt::LowerHex};
+
 use super::*;
+
+const READ_ERROR_MSG: &str = "Could not read bytes";
 
 /// Builtin byte formatter (used for `second` column by default)
 #[derive(Clone)]
@@ -43,20 +47,26 @@ impl ByteFormatting for ByteFormatter {
     }
 
     fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
+        use std::str::from_utf8_unchecked;
+
         let gr = &self.groupping;
-
-        let mut result = String::new();
-
         let sep = gr.separator();
+
+        let worst_len = bytes.len() * 2 + sep.len() * gr.number_of_groups();
+        let mut result = vec![0u8; worst_len];
+        let mut result_len = 0usize;
+
         let mut tmp = bytes;
 
         let mut byte_number = byte_number_in_row;
         while tmp.len() != 0 {
+            let mut sep = &sep[..];
+
             let to_format = min(tmp.len(), gr.bytes_left_in_group_after(byte_number));
 
             let needs_separator = byte_number != 0 && gr.is_aligned_at(byte_number);
             if needs_separator {
-                result += &sep;
+                result_len += sep.read(&mut result[result_len..]).expect(READ_ERROR_MSG);
             }
 
             byte_number += to_format;
@@ -64,11 +74,11 @@ impl ByteFormatting for ByteFormatter {
             if to_format != 0 {
                 if self.is_little_endian {
                     for byte in tmp[..to_format].iter().rev() {
-                        result += &format!("{:02x}", byte);
+                        result_len += Self::format_into_buffer(*byte, &mut result[result_len..]);
                     }
                 } else {
                     for byte in &tmp[..to_format] {
-                        result += &format!("{:02x}", byte);
+                        result_len += Self::format_into_buffer(*byte, &mut result[result_len..]);
                     }
                 }
             }
@@ -76,13 +86,13 @@ impl ByteFormatting for ByteFormatter {
             tmp = &tmp[to_format..]
         }
 
-        result
+        unsafe { from_utf8_unchecked(&result[..result_len]) }.to_string()
     }
 
     fn padding_string(&self, byte_number_in_row: usize) -> String {
         let padding = "..";
         let gr = &self.groupping;
-        let sep = gr.separator();
+        let sep = unsafe { String::from_utf8_unchecked(gr.separator()) };
 
         let mut result = String::new();
 
@@ -110,6 +120,20 @@ impl ByteFormatting for ByteFormatter {
 
     fn separators(&self) -> &Separators {
         &self.separators
+    }
+}
+
+const LOWER_HEX: [u8; 16] = [
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+];
+
+impl ByteFormatter {
+    #[inline(always)]
+    fn format_into_buffer(byte: u8, buf: &mut [u8]) -> usize {
+        buf[0] = LOWER_HEX[(byte >> 4) as usize];
+        buf[1] = LOWER_HEX[(byte & 0x0f) as usize];
+
+        2
     }
 }
 
@@ -148,7 +172,11 @@ mod tests {
 
     #[test]
     fn test_unordered() {
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, ""), 1), false, Default::default());
+        let fmt = ByteFormatter::new(
+            Groupping::RepeatingGroup(Group::new(4, ""), 1),
+            false,
+            Default::default(),
+        );
         let cases = vec![Case::new(
             vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],
             "feedface",
@@ -157,7 +185,11 @@ mod tests {
             case.run(&fmt);
         }
 
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 2), false, Default::default());
+        let fmt = ByteFormatter::new(
+            Groupping::RepeatingGroup(Group::new(4, " "), 2),
+            false,
+            Default::default(),
+        );
         let cases = vec![
             Case::new(
                 vec![vec![0xfeu8, 0xed, 0xfa], vec![0xce]],
@@ -185,7 +217,11 @@ mod tests {
             case.run(&fmt);
         }
 
-        let fmt = ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, "-"), 4), true, Default::default());
+        let fmt = ByteFormatter::new(
+            Groupping::RepeatingGroup(Group::new(4, "-"), 4),
+            true,
+            Default::default(),
+        );
         let cases = vec![
             Case::new(
                 vec![vec![
@@ -195,14 +231,12 @@ mod tests {
                 "cefaedfe-cefaedfe-cefaedfe-cefaedfe",
             ),
             Case::new(
-                vec![vec![
-                    0xfeu8, 0xed, 0xfa, 0xce, 0xfe, 0xed, 0xfa, 0xce
-                ]],
+                vec![vec![0xfeu8, 0xed, 0xfa, 0xce, 0xfe, 0xed, 0xfa, 0xce]],
                 "cefaedfe-cefaedfe-........-........",
             ),
             Case::new(
                 vec![vec![
-                    0xfeu8, 0xed, 0xfa, 0xce, 0xfe, 0xed, 0xfa, 0xce, 0xfe, 0xed
+                    0xfeu8, 0xed, 0xfa, 0xce, 0xfe, 0xed, 0xfa, 0xce, 0xfe, 0xed,
                 ]],
                 "cefaedfe-cefaedfe-edfe....-........",
             ),
