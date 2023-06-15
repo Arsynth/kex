@@ -133,7 +133,7 @@ impl GrouppedWriter {
     }
 
     /// Callback takes buffer and byte number past last byte
-    pub(super) fn flush<WR: FnMut(&[u8], usize) -> Result<()>> (
+    pub(super) fn flush<WR: FnMut(&[u8], usize) -> Result<()>>(
         &mut self,
         mut callback: WR,
     ) -> std::io::Result<()> {
@@ -157,19 +157,16 @@ pub(crate) enum WriteResult<'a> {
 
 pub(super) struct TextWriter<C: CharFormatting> {
     fmt: C,
-
-    result: String,
     avail: usize,
-    max_bytes: usize,
+    storage: Vec<u8>,
 }
 
 impl<C: CharFormatting> TextWriter<C> {
     pub(super) fn new(fmt: C, max_bytes: usize) -> Self {
         Self {
             fmt,
-            result: String::new(),
             avail: 0,
-            max_bytes,
+            storage: vec![0u8; max_bytes],
         }
     }
 }
@@ -177,35 +174,29 @@ impl<C: CharFormatting> TextWriter<C> {
 impl<C: CharFormatting> TextWriter<C> {
     pub(super) fn write(&mut self, bytes: &[u8]) -> Result<usize> {
         assert!(
-            self.avail + bytes.len() <= self.max_bytes,
+            self.avail + bytes.len() <= self.storage.len(),
             "Text writer received too much bytes before starting new row"
         );
 
-        self.avail += bytes.len();
+        let mut bytes = &bytes[..];
 
-        let s = self.fmt.format(bytes);
-        self.result += &s;
+        self.avail += bytes.read(&mut self.storage[self.avail..])?;
 
         Ok(bytes.len())
     }
 
     pub(super) fn take_result(&mut self) -> String {
+        let trail_sep = String::from_utf8(self.fmt.separators().trailing.clone()).unwrap();
+        
+        let text = self.fmt.format(&self.storage[..self.avail]);
 
-        let mut result = String::new();
-        let tr_sep = std::str::from_utf8(&self.fmt.separators().trailing).unwrap();
-        result += tr_sep;
+        let tail_length = self.storage.len() - self.avail;
+        let tail = self.fmt.padding_string(tail_length);
 
-        result += &self.result;
+        let lead_sep = std::str::from_utf8(&self.fmt.separators().leaidng).unwrap();
 
-        let tail = self.fmt.padding_string(self.max_bytes - self.avail);
-        result += &tail;
-
-        let le_sep = std::str::from_utf8(&self.fmt.separators().leaidng).unwrap();
-        result += le_sep;
-
-        self.result = String::new();
         self.avail = 0;
 
-        result
+        format!("{trail_sep}{text}{tail}{lead_sep}")
     }
 }

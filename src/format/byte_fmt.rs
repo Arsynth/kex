@@ -1,4 +1,4 @@
-use std::{io::{Read, Write}, fmt::LowerHex};
+use std::io::Read;
 
 use super::*;
 
