@@ -1,5 +1,5 @@
 use ascii::*;
-use std::cmp::min;
+use std::{cmp::min, io::Write};
 
 pub mod address_fmt;
 pub use address_fmt::*;
@@ -12,6 +12,8 @@ pub use char_fmt::*;
 
 pub mod ordering;
 pub use ordering::*;
+
+use std::io::Result;
 
 /// Used for address formatting (`first` column)
 pub trait AddressFormatting {
@@ -35,7 +37,7 @@ pub trait ByteFormatting {
     ///
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
-    fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String;
+    fn format<O: Write>(&self, bytes: &[u8], byte_number_in_row: usize, out: &mut O) -> Result<usize>;
 
     /// When writing data chunks to [`super::Printer`] is finished, last output line may be incomplete.
     /// This function should provide spacing string for incomplete row
@@ -50,14 +52,14 @@ pub trait ByteFormatting {
     ///
     /// `byte_number_in_row` - number of byte in row (from where the `bytes` started formatting).
     /// It useful for determining, where to place group separators (if your formatter uses it)
-    fn padding_string(&self, byte_number_in_row: usize) -> String;
+    fn format_padding<O: Write>(&self, byte_number_in_row: usize, out: &mut O) -> Result<()>;
 
     fn separators(&self) -> &Separators;
 }
 
 pub trait CharFormatting {
-    fn format(&mut self, bytes: &[u8]) -> String;
-    fn padding_string(&mut self, byte_count: usize) -> String;
+    fn format<O: Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<usize>;
+    fn format_padding<O: Write>(&mut self, byte_count: usize, out: &mut O) -> Result<()>;
 
     fn separators(&self) -> &Separators;
 }

@@ -41,6 +41,19 @@ impl Groupping {
         }
     }
 
+    pub(crate) fn is_aligned_with(&self, number: usize, len: usize) -> bool {
+        let bpr = self.bytes_per_row();
+        assert!(
+            bpr >= number + len,
+            "is_aligned_with(): Trying to exceed maximum row length"
+        );
+
+        match self {
+            Groupping::RowWide(_) => number == 0,
+            Groupping::RepeatingGroup(g, _) => number % g.size == 0 && (number + len) % g.size == 0,
+        }
+    }
+
     pub(crate) fn bytes_per_row(&self) -> usize {
         match self {
             Groupping::RowWide(r) => *r,
@@ -50,7 +63,7 @@ impl Groupping {
 
     pub(crate) fn group_of_byte(&self, number: usize) -> usize {
         assert!(
-            self.bytes_per_row() > number,
+            self.bytes_per_row() >= number,
             "group_of_byte():Trying to exceed maximum row length"
         );
         match self {

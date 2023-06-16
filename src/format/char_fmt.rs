@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Read};
+use std::{fmt::Display};
 
 use super::*;
 
@@ -11,47 +11,39 @@ pub struct CharFormatter {
 
 impl CharFormatter {
     pub fn new(placeholder: impl Display, separators: Separators) -> Self {
+        let placeholder = Vec::from(placeholder.to_string().as_bytes());
+
         Self {
-            placeholder: Vec::from(placeholder.to_string().as_bytes()),
+            placeholder,
             separators,
         }
     }
 }
 
 impl CharFormatting for CharFormatter {
-    fn format(&mut self, bytes: &[u8]) -> String {
-        use std::str::from_utf8_unchecked;
-
+    fn format<O: Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<usize> {
         let placeholder = &self.placeholder[..];
-        let placeholder_len = placeholder.len();
-
-        let mut result = vec![0u8; bytes.len() * self.placeholder.len()];
-        let mut result_len = 0;
 
         for i in 0..bytes.len() {
-            let mut placeholder = &placeholder[..];
             match AsciiChar::from_ascii(bytes[i]) {
                 Ok(chr) => {
                     if chr.is_ascii_printable() && !chr.is_ascii_control() {
-                        result[result_len] = bytes[i];
-                        result_len += 1;
+                        out.write_all(&bytes[i..i + 1])?;
                     } else {
-                        _ = placeholder.read_exact(&mut result[result_len..result_len + placeholder.len()]);
-                        result_len += placeholder_len;
+                        out.write_all(placeholder)?;
                     }
                 }
                 Err(_) => {
-                    _ = placeholder.read_exact(&mut result[result_len..result_len + placeholder.len()]);
-                    result_len += placeholder_len;
+                    out.write_all(placeholder)?;
                 }
             }
         }
 
-        unsafe { from_utf8_unchecked(&result[..result_len]) }.to_string()
+        Ok(bytes.len())
     }
 
-    fn padding_string(&mut self, byte_count: usize) -> String {
-        " ".repeat(byte_count)
+    fn format_padding<O: Write>(&mut self, byte_count: usize, out: &mut O) -> Result<()> {
+        out.write_all(&b" ".repeat(byte_count))
     }
 
     fn separators(&self) -> &Separators {

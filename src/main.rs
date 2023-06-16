@@ -10,10 +10,9 @@ fn main() {
     // let stdin = std::io::stdin();
     // let mut handle = stdin.lock();
 
-    
     let config = Config::new(
         Some(AddressFormatter::new(AddressStyle::Hex(16), Default::default())),
-        ByteFormatter::new(Groupping::RepeatingGroup(Group::new(16, " "), 1), false, Default::default()),
+        ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 4), false, Default::default()),
         Some(CharFormatter::default()),
     );
     let mut printer = Printer::new(stdout(), 0, config);

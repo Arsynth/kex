@@ -5,7 +5,10 @@ fn main() {
     use std::io::stdout;
 
     let config = Config::new(
-        Some(AddressFormatter::new(AddressStyle::Dec(8), Separators::new("", &'\u{1F929}'.to_string()))),
+        Some(AddressFormatter::new(
+            AddressStyle::Dec(8),
+            Separators::new("", &'\u{1F929}'.to_string()),
+        )),
         MyByteFormatter::new(),
         Some(CharFormatter::new(
             ".".to_string(),
@@ -63,8 +66,8 @@ impl ByteFormatting for MyByteFormatter {
         self.fmt.format(bytes, byte_number_in_row)
     }
 
-    fn padding_string(&self, byte_number_in_row: usize) -> String {
-        self.fmt.padding_string(byte_number_in_row)
+    fn format_padding(&self, byte_number_in_row: usize) -> String {
+        self.fmt.format_padding(byte_number_in_row)
     }
 
     fn separators(&self) -> &Separators {

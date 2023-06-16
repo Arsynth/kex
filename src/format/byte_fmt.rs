@@ -1,8 +1,6 @@
-use std::io::Read;
+use std::io::*;
 
 use super::*;
-
-const READ_ERROR_MSG: &str = "Could not read bytes";
 
 /// Builtin byte formatter (used for `second` column by default)
 #[derive(Clone)]
@@ -46,27 +44,24 @@ impl ByteFormatting for ByteFormatter {
         self.groupping.clone()
     }
 
-    fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
-        use std::str::from_utf8_unchecked;
-
+    fn format<O: Write>(&self, bytes: &[u8], byte_number_in_row: usize, out: &mut O) -> Result<usize> {
         let gr = &self.groupping;
-        let sep = gr.separator();
 
-        let worst_len = bytes.len() * 2 + sep.len() * gr.number_of_groups();
-        let mut result = vec![0u8; worst_len];
-        let mut result_len = 0usize;
+        if let ByteOrder::Strict = self.byte_order() {
+            assert!(gr.is_aligned_with(byte_number_in_row, bytes.len()));
+        }
+
+        let sep = gr.separator();
 
         let mut tmp = bytes;
 
         let mut byte_number = byte_number_in_row;
         while tmp.len() != 0 {
-            let mut sep = &sep[..];
-
             let to_format = min(tmp.len(), gr.bytes_left_in_group_after(byte_number));
 
             let needs_separator = byte_number != 0 && gr.is_aligned_at(byte_number);
             if needs_separator {
-                result_len += sep.read(&mut result[result_len..]).expect(READ_ERROR_MSG);
+                out.write_all(&sep[..])?;
             }
 
             byte_number += to_format;
@@ -74,11 +69,11 @@ impl ByteFormatting for ByteFormatter {
             if to_format != 0 {
                 if self.is_little_endian {
                     for byte in tmp[..to_format].iter().rev() {
-                        result_len += Self::format_into_buffer(*byte, &mut result[result_len..]);
+                        Self::format_byte(*byte, out)?;
                     }
                 } else {
                     for byte in &tmp[..to_format] {
-                        result_len += Self::format_into_buffer(*byte, &mut result[result_len..]);
+                        Self::format_byte(*byte, out)?;
                     }
                 }
             }
@@ -86,15 +81,13 @@ impl ByteFormatting for ByteFormatter {
             tmp = &tmp[to_format..]
         }
 
-        unsafe { from_utf8_unchecked(&result[..result_len]) }.to_string()
+        Ok(bytes.len())
     }
 
-    fn padding_string(&self, byte_number_in_row: usize) -> String {
-        let padding = "..";
+    fn format_padding<O: Write>(&self, byte_number_in_row: usize, out: &mut O) -> Result<()> {
+        let padding = b"..";
         let gr = &self.groupping;
-        let sep = unsafe { String::from_utf8_unchecked(gr.separator()) };
-
-        let mut result = String::new();
+        let sep = gr.separator();
 
         let mut tmp = gr.bytes_per_row() - byte_number_in_row;
         let mut byte_number = byte_number_in_row;
@@ -103,19 +96,19 @@ impl ByteFormatting for ByteFormatter {
 
             let needs_separator = byte_number != 0 && gr.is_aligned_at(byte_number);
             if needs_separator {
-                result += &sep;
+                out.write_all(&sep)?;
             }
 
             byte_number += to_format;
 
             if to_format != 0 {
-                result += &padding.repeat(to_format);
+                out.write_all(&padding.repeat(to_format))?;
             }
 
             tmp -= to_format;
         }
 
-        result
+        Ok(())
     }
 
     fn separators(&self) -> &Separators {
@@ -129,11 +122,14 @@ const LOWER_HEX: [u8; 16] = [
 
 impl ByteFormatter {
     #[inline(always)]
-    fn format_into_buffer(byte: u8, buf: &mut [u8]) -> usize {
+    fn format_byte<O: Write>(byte: u8, out: &mut O) -> Result<()> {
+        let mut buf: [u8; 2] = [0, 0];
         buf[0] = LOWER_HEX[(byte >> 4) as usize];
         buf[1] = LOWER_HEX[(byte & 0x0f) as usize];
 
-        2
+        out.write_all(&buf)?;
+        
+        Ok(())
     }
 }
 
@@ -155,16 +151,18 @@ mod tests {
         }
 
         fn run(&self, fmt: &ByteFormatter) {
-            let mut out = String::new();
+            const WRITE_ERROR_MSG: &str = "Formatting error";
+
+            let mut out = Vec::<u8>::new();
             let mut num = 0usize;
             for part in self.parts.iter() {
-                let s = fmt.format(&part[..], num);
-                out += &s;
-
+                fmt.format(&part, num, &mut out).expect(WRITE_ERROR_MSG);
                 num += part.len();
             }
 
-            out += &fmt.padding_string(num);
+            fmt.format_padding(num, &mut out).unwrap();
+
+            let out = String::from_utf8(out).expect(WRITE_ERROR_MSG);
 
             assert_eq!(out, self.result);
         }
@@ -216,7 +214,10 @@ mod tests {
         for case in cases {
             case.run(&fmt);
         }
+    }
 
+    #[test]
+    fn test_little_endian() {
         let fmt = ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(4, "-"), 4),
             true,
@@ -244,10 +245,5 @@ mod tests {
         for case in cases {
             case.run(&fmt);
         }
-    }
-
-    #[test]
-    fn test_little_endian() {
-        assert!(false);
     }
 }
