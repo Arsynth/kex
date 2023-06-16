@@ -9,7 +9,11 @@ fn main() {
             AddressStyle::Dec(8),
             Separators::new("", &'\u{1F929}'.to_string()),
         )),
-        MyByteFormatter::new(),
+        ByteFormatter::new(
+            Groupping::RepeatingGroup(Group::new(4, "#"), 4),
+            false,
+            Default::default(),
+        ),
         Some(CharFormatter::new(
             ".".to_string(),
             Separators::new(&'\u{1F4A5}'.to_string(), &'\u{1F4A8}'.to_string()),
@@ -34,43 +38,4 @@ fn main() {
     }
 
     printer.finish();
-}
-
-#[derive(Clone)]
-struct MyByteFormatter {
-    fmt: ByteFormatter,
-}
-
-impl MyByteFormatter {
-    fn new() -> Self {
-        Self {
-            fmt: ByteFormatter::new(
-                Groupping::RepeatingGroup(Group::new(4, "#"), 4),
-                false,
-                Default::default(),
-            ),
-        }
-    }
-}
-
-impl ByteFormatting for MyByteFormatter {
-    fn byte_order(&self) -> ByteOrder {
-        self.fmt.byte_order()
-    }
-
-    fn groupping(&self) -> Groupping {
-        self.fmt.groupping()
-    }
-
-    fn format(&self, bytes: &[u8], byte_number_in_row: usize) -> String {
-        self.fmt.format(bytes, byte_number_in_row)
-    }
-
-    fn format_padding(&self, byte_number_in_row: usize) -> String {
-        self.fmt.format_padding(byte_number_in_row)
-    }
-
-    fn separators(&self) -> &Separators {
-        self.fmt.separators()
-    }
 }

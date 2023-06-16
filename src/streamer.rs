@@ -8,7 +8,7 @@ pub(super) struct Streamer<A: AddressFormatting, B: ByteFormatting, C: CharForma
     byte_fmt: B,
     char_fmt: Option<C>,
 
-    offset: usize,
+    total_written: usize,
     printable_offset: usize,
 
     cache: Vec<u8>,
@@ -27,7 +27,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             addr_fmt,
             byte_fmt,
             char_fmt,
-            offset: 0,
+            total_written: 0,
             printable_offset,
             cache: vec![0u8; bpr],
             available: 0,
@@ -43,6 +43,12 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let group_size = gr.max_group_size();
 
         while tmp.len() != 0 {
+            let byte_in_row = self.total_written % bpr;
+
+            if self.available == 0 {
+                self.start_row(out)?;
+            }
+
             let to_cache = min(self.cache.len() - self.available, tmp.len());
 
             let old_available = self.available;
@@ -58,23 +64,31 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
             // Start reading from cache
             if group_cache.len() != 0 {
-                self.offset += self.byte_fmt.format(group_cache, self.offset % bpr, out)?;
+                self.total_written += self.byte_fmt.format(group_cache, byte_in_row, out)?;
             }
 
             // Finish row
             if self.available == bpr {
-                out.write_all(ROW_SEPARATOR)?;
-
-                self.available = 0;
+                self.finish_row(out)?;
             }
-
-            // tmp = &tmp[to_cache..];
         }
 
         Ok(())
     }
 
-    pub(crate) fn write_tail<O: Write>(&self, out: &mut O) -> Result<()> {
+    pub(crate) fn write_tail<O: Write>(&mut self, out: &mut O) -> Result<()> {
+        if self.available == 0 {
+            return Ok(());
+        }
+
+        let written_in_row = self.total_written % self.byte_fmt.groupping().bytes_per_row();
+        assert!(self.available >= written_in_row, "Bytes written more than available");
+
+        let remaining = &self.cache[written_in_row..self.available];
+        self.byte_fmt.format(remaining, written_in_row, out)?;
+
+        self.finish_row(out)?;
+
         Ok(())
     }
 
@@ -92,5 +106,50 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let end = gr.group_of_byte(available) * group_size;
 
         &self.cache[start..end]
+    }
+
+    fn start_row<O: Write>(&self, out: &mut O) -> Result<()> {
+        self.write_current_offset(out)?;
+        out.write_all(&self.byte_fmt.separators().trailing)?;
+
+        Ok(())
+    }
+
+    fn write_current_offset<O: Write>(&self, out: &mut O) -> Result<()> {
+        if let Some(fmt) = &self.addr_fmt {
+            out.write_all(&fmt.separators().trailing)?;
+            fmt.format(self.total_written + self.printable_offset, out)?;
+            out.write_all(&fmt.separators().leading)?;
+        }
+
+        Ok(())
+    }
+
+    fn finish_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
+        self.byte_fmt.format_padding(self.available, out)?;
+        
+        out.write_all(&self.byte_fmt.separators().leading)?;
+
+        self.write_text(out)?;
+
+        out.write_all(ROW_SEPARATOR)?;
+        self.available = 0;
+
+        Ok(())
+    }
+
+    fn write_text<O: Write>(&self, out: &mut O) -> Result<()> {
+        if let Some(fmt) = &self.char_fmt {
+            out.write_all(&fmt.separators().trailing)?;
+
+            fmt.format(&self.cache[..self.available], out)?;
+
+            let tail_len = self.byte_fmt.groupping().bytes_per_row() - self.available;
+            fmt.format_padding(tail_len, out)?;
+
+            out.write_all(&fmt.separators().leading)?;
+        }
+
+        Ok(())
     }
 }

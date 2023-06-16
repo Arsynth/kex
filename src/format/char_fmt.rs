@@ -21,7 +21,7 @@ impl CharFormatter {
 }
 
 impl CharFormatting for CharFormatter {
-    fn format<O: Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<usize> {
+    fn format<O: Write>(&self, bytes: &[u8], out: &mut O) -> Result<usize> {
         let placeholder = &self.placeholder[..];
 
         for i in 0..bytes.len() {
@@ -42,7 +42,7 @@ impl CharFormatting for CharFormatter {
         Ok(bytes.len())
     }
 
-    fn format_padding<O: Write>(&mut self, byte_count: usize, out: &mut O) -> Result<()> {
+    fn format_padding<O: Write>(&self, byte_count: usize, out: &mut O) -> Result<()> {
         out.write_all(&b" ".repeat(byte_count))
     }
 

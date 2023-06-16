@@ -17,7 +17,7 @@ use std::io::Result;
 
 /// Used for address formatting (`first` column)
 pub trait AddressFormatting {
-    fn format(&self, addr: usize) -> String;
+    fn format<O: Write>(&self, addr: usize, out: &mut O) -> Result<()>;
 
     fn separators(&self) -> &Separators;
 }
@@ -58,8 +58,8 @@ pub trait ByteFormatting {
 }
 
 pub trait CharFormatting {
-    fn format<O: Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<usize>;
-    fn format_padding<O: Write>(&mut self, byte_count: usize, out: &mut O) -> Result<()>;
+    fn format<O: Write>(&self, bytes: &[u8], out: &mut O) -> Result<usize>;
+    fn format_padding<O: Write>(&self, byte_count: usize, out: &mut O) -> Result<()>;
 
     fn separators(&self) -> &Separators;
 }
@@ -67,13 +67,13 @@ pub trait CharFormatting {
 #[derive(Clone)]
 pub struct Separators {
     pub(crate) trailing: Vec<u8>,
-    pub(crate) leaidng: Vec<u8>,
+    pub(crate) leading: Vec<u8>,
 }
 
 impl Separators {
     pub fn new(trailing: &str, leaidng: &str) -> Self {
         Self {
-            leaidng: Vec::from(leaidng),
+            leading: Vec::from(leaidng),
             trailing: Vec::from(trailing),
         }
     }
@@ -82,7 +82,7 @@ impl Separators {
 impl Default for Separators {
     fn default() -> Self {
         Self {
-            leaidng: Vec::from(" "),
+            leading: Vec::from(" "),
             trailing: Default::default(),
         }
     }

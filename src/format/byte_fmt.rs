@@ -47,10 +47,6 @@ impl ByteFormatting for ByteFormatter {
     fn format<O: Write>(&self, bytes: &[u8], byte_number_in_row: usize, out: &mut O) -> Result<usize> {
         let gr = &self.groupping;
 
-        if let ByteOrder::Strict = self.byte_order() {
-            assert!(gr.is_aligned_with(byte_number_in_row, bytes.len()));
-        }
-
         let sep = gr.separator();
 
         let mut tmp = bytes;

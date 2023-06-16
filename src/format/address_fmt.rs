@@ -24,15 +24,17 @@ impl Default for AddressFormatter {
 }
 
 impl AddressFormatting for AddressFormatter {
-    fn format(&self, addr: usize) -> String {
-        match self.style {
+    fn format<O: Write>(&self, addr: usize, out: &mut O) -> Result<()> {
+        let result = match self.style {
             AddressStyle::Dec(w) => {
                 format!("{:width$}", addr, width = w)
             },
             AddressStyle::Hex(w) => {
                 format!("{:0width$x}", addr, width = w)
             },
-        }
+        };
+
+        out.write_all(result.as_bytes())
     }
 
     fn separators(&self) -> &Separators {
