@@ -98,7 +98,9 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             at_number <= available,
             "Unbalanced groupping. Start number greater than end number"
         );
-        let group_size = self.byte_fmt.groupping().max_group_size();
+
+        let gr = &self.byte_fmt.groupping();
+        let group_size = gr.max_group_size();
 
         let gr = self.byte_fmt.groupping();
 
