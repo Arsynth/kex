@@ -18,6 +18,7 @@ fn main() {
             ".".to_string(),
             Separators::new(&'\u{1F4A5}'.to_string(), &'\u{1F4A8}'.to_string()),
         )),
+        true
     );
     let mut printer = Printer::new(Box::new(stdout()), 0, config);
 

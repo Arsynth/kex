@@ -14,6 +14,7 @@ fn main() {
         Some(AddressFormatter::new(AddressStyle::Hex(16), Default::default())),
         ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 4), false, Default::default()),
         Some(CharFormatter::default()),
+        true,
     );
     let mut printer = Printer::new(stdout(), 0, config);
     

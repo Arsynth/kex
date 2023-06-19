@@ -10,6 +10,8 @@ pub struct Config<
     pub(super) addr: Option<A>,
     pub(super) byte: B,
     pub(super) text: Option<C>,
+
+    pub(super) dedup_enabled: bool,
 }
 
 impl<A: AddressFormatting + Clone, B: ByteFormatting + Clone, C: CharFormatting + Clone>
@@ -17,11 +19,17 @@ impl<A: AddressFormatting + Clone, B: ByteFormatting + Clone, C: CharFormatting 
 {
     /// Create new config.
     /// `bytes_per_row` should be greater than zero, otherwise it defaults to [`DEFAULT_BYTES_PER_ROW`]
-    pub fn new(address_format: Option<A>, byte_format: B, text_format: Option<C>) -> Self {
+    pub fn new(
+        address_format: Option<A>,
+        byte_format: B,
+        text_format: Option<C>,
+        dedup_enabled: bool,
+    ) -> Self {
         Self {
             addr: address_format,
             byte: byte_format,
             text: text_format,
+            dedup_enabled,
         }
     }
 }
@@ -37,6 +45,7 @@ impl<
             addr: Some(A::default()),
             byte: B::default(),
             text: Some(C::default()),
+            dedup_enabled: true,
         }
     }
 }

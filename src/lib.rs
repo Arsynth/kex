@@ -50,7 +50,7 @@ impl<
     pub fn new(out: O, start_address: usize, config: Config<A, B, C>) -> Printer<O, A, B, C> {
         Printer {
             out: Some(out),
-            streamer: Streamer::new(config.addr, config.byte, config.text, start_address),
+            streamer: Streamer::new(config.addr, config.byte, config.text, start_address, config.dedup_enabled),
             is_finished: false,
         }
     }
