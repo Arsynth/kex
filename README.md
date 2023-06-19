@@ -6,32 +6,35 @@ Streamed hex dumping library.
 * Streamed I/O. [See the demo in asciinema](https://asciinema.org/a/591057)
 * Works with output, implementing `Write` trait.
 * Customizable formatting
+* Row deduplication
+* Very fast
 
 # Examples
 ## One of examples
 ```rust
-//! Example for reading from `stdin`
-
+use kex::*;
+use std::fs::File;
+use std::io::stdout;
 use std::io::{Read, Write};
 
-use kex::*;
-
-/// Usage:
-/// cargo run --example stdin
-/// 
-/// Or:
-/// cat /bin/cat | cargo run --example stdin
-/// 
 fn main() {
-    use std::io::stdout;
 
-    let mut buf = [0u8; 64];
-    let stdin = std::io::stdin();
-    let mut handle = stdin.lock();
+    let mut buf = [0u8; 4096];
+
+    // let stdin = std::io::stdin();
+    // let mut handle = stdin.lock();
+
+    let config = Config::new(
+        Some(AddressFormatter::new(AddressStyle::Hex(16), Default::default())),
+        ByteFormatter::new(Groupping::RepeatingGroup(Group::new(4, " "), 4), false, Default::default()),
+        Some(CharFormatter::default()),
+        true,
+    );
+    let mut printer = Printer::new(stdout(), 0, config);
     
-    let mut printer = Printer::default_fmt_with(Box::new(stdout()), 0);
+    let mut file = File::open("/bin/cat").expect("Can't open file");
 
-    while let Ok(size) = handle.read(&mut buf) {
+    while let Ok(size) = file.read(&mut buf) {
         if size == 0 {
             break;
         }
@@ -40,22 +43,38 @@ fn main() {
 
     printer.finish();
 }
+
+
 ```
 
 
 See all the examples in `examples` directory in the crate root
 
 # Documentation
-https://docs.rs/kex/0.1.8/kex/
+https://docs.rs/kex/0.1.9/kex/
+
+# Deduplication
+```
+0000000000000000 cafebabe 00000002 01000007 00000003 |................|
+0000000000000010 00004000 000111c0 0000000e 0100000c |..@.............|
+0000000000000020 80000002 00018000 0000d0f0 0000000e |................|
+0000000000000030 00000000 00000000 00000000 00000000 |................|
+*
+0000000000004000 cffaedfe 07000001 03000000 02000000 |................|
+0000000000004010 11000000 08060000 85002000 00000000 |.......... .....|
+0000000000004020 19000000 48000000 5f5f5041 47455a45 |....H...__PAGEZE|
+0000000000004030 524f0000 00000000 00000000 00000000 |RO..............|
+```
 
 # Customized formatting
 ```
        0🤩deadbeef#deadbeef#deadbeef#deadbeef 💥................💨
-      16🤩deadbeef#deadbeef#deadbeef#deadbeef 💥................💨
-      32🤩deadbeef#deadbeef#49742077#6f726b73 💥........It works💨
-      48🤩212121fe#edfafeed#fafeedfa#feedfafe 💥!!!.............💨
-      64🤩edfafeed#fafeedfa#feedfafe#edfafeed 💥................💨
-      80🤩fafeedfa#........#........#........ 💥....            💨
+*
+      32🤩deadbeef#deadbeef#43757374#6f6d2070 💥........Custom p💨
+      48🤩72696e74#696e67fe#edfafeed#fafeedfa 💥rinting.........💨
+      64🤩feedfafe#edfafeed#fafeedfa#feedfafe 💥................💨
+      80🤩edfafeed#fafeedfa*
+      88🤩
 ```
 
 # Bug reports or feature requests

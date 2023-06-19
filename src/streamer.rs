@@ -17,6 +17,7 @@ pub(super) struct Streamer<A: AddressFormatting, B: ByteFormatting, C: CharForma
 
     dedup_enabled: bool,
     row_state: RowState,
+    last_row_changed: bool,
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, C> {
@@ -38,6 +39,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             available: 0,
             dedup_enabled,
             row_state: RowState::CanWrite,
+            last_row_changed: false,
         }
     }
 
@@ -98,8 +100,6 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let gr = &self.byte_fmt.groupping();
         let bpr = gr.bytes_per_row();
 
-        let mut row_was_written = false;
-
         while tmp.len() != 0 {
             match self.row_state {
                 RowState::CanWrite => {
@@ -115,7 +115,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             let cache_part = &self.cache[self.available..self.available + to_check];
             let should_write = ignore_dedup || &tmp[..to_check] != cache_part;
 
-            row_was_written |= should_write;
+            self.last_row_changed |= should_write;
 
             let mut cache_part = &mut self.cache[self.available..self.available + to_check];
             if should_write {
@@ -128,7 +128,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             self.available += to_check;
 
             if self.cache.len() - self.available == 0 {
-                if row_was_written {
+                if self.last_row_changed {
                     self.start_row(out)?;
                     self.total_written += self.byte_fmt.format(&self.cache, 0, out)?;
                     self.row_state = RowState::CanWrite;
@@ -138,7 +138,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
                 self.finish_row(out)?;
 
-                row_was_written = false;
+                self.last_row_changed = false;
             }
         }
 
