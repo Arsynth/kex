@@ -16,7 +16,7 @@ pub(super) struct Streamer<A: AddressFormatting, B: ByteFormatting, C: CharForma
     available: usize,
 
     dedup_enabled: bool,
-    is_last_duplicated: bool,
+    row_state: RowState,
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, C> {
@@ -37,14 +37,12 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             cache: vec![0u8; bpr],
             available: 0,
             dedup_enabled,
-            is_last_duplicated: false,
+            row_state: RowState::CanWrite,
         }
     }
 
     pub(crate) fn push<O: std::io::Write>(&mut self, bytes: &[u8], out: &mut O) -> Result<()> {
-        let dedup_enabled = true;
-
-        if dedup_enabled {
+        if self.dedup_enabled {
             self.push_deduplicated(bytes, out)
         } else {
             self.push_groupped(bytes, out)
@@ -100,19 +98,24 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let gr = &self.byte_fmt.groupping();
         let bpr = gr.bytes_per_row();
 
-        
+        let mut row_was_written = false;
+
         while tmp.len() != 0 {
+            match self.row_state {
+                RowState::CanWrite => {
+                    self.row_state = RowState::NeedsPlaceholder;
+                }
+                _ => (),
+            }
+
             let ignore_dedup = self.total_written < bpr;
 
-            let byte_in_row = self.total_written % bpr;
             let to_check = min(self.cache.len() - self.available, tmp.len());
 
             let cache_part = &self.cache[self.available..self.available + to_check];
             let should_write = ignore_dedup || &tmp[..to_check] != cache_part;
 
-            if should_write {
-                self.is_last_duplicated = false;
-            }
+            row_was_written |= should_write;
 
             let mut cache_part = &mut self.cache[self.available..self.available + to_check];
             if should_write {
@@ -122,28 +125,33 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             }
 
             // Deduplication was previously interrupted and we continue write row
-            if should_write || self.available != 0 { 
-                self.available += to_check;
-            }
+            self.available += to_check;
 
             if self.cache.len() - self.available == 0 {
-                if self.available != 0 {
+                if row_was_written {
                     self.start_row(out)?;
                     self.total_written += self.byte_fmt.format(&self.cache, 0, out)?;
+                    self.row_state = RowState::CanWrite;
+                } else {
+                    self.total_written += self.cache.len();
                 }
-                self.finish_row(out)?;
-            }
 
+                self.finish_row(out)?;
+
+                row_was_written = false;
+            }
         }
 
         Ok(())
     }
 
     pub(crate) fn write_tail<O: Write>(&mut self, out: &mut O) -> Result<()> {
+        if self.dedup_enabled {
+            self.write_current_offset(out)?;
+        }
+
         if self.available == 0 {
-            if self.dedup_enabled && self.is_last_duplicated {
-                self.write_current_offset(out)?;
-            }
+            out.write_all(ROW_SEPARATOR)?;
             return Ok(());
         }
 
@@ -154,9 +162,13 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         );
 
         let remaining = &self.cache[written_in_row..self.available];
-        self.byte_fmt.format(remaining, written_in_row, out)?;
+        self.total_written += self.byte_fmt.format(remaining, written_in_row, out)?;
 
         self.finish_row(out)?;
+
+        self.write_current_offset(out)?;
+
+        out.write_all(ROW_SEPARATOR)?;
 
         Ok(())
     }
@@ -197,29 +209,35 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     }
 
     fn finish_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        if self.available == 0 {
-            return self.skip_row(out);
+        match self.row_state {
+            RowState::CanWrite => {
+                self.byte_fmt.format_padding(self.available, out)?;
+
+                out.write_all(&self.byte_fmt.separators().leading)?;
+
+                self.write_text(out)?;
+
+                out.write_all(ROW_SEPARATOR)?;
+            }
+            RowState::NeedsPlaceholder => {
+                self.replace_row_with_placeholder(out)?;
+            }
+            RowState::Skipped => (),
         }
 
-        self.byte_fmt.format_padding(self.available, out)?;
-
-        out.write_all(&self.byte_fmt.separators().leading)?;
-
-        self.write_text(out)?;
-
-        out.write_all(ROW_SEPARATOR)?;
         self.available = 0;
-
         Ok(())
     }
 
-    fn skip_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        if !self.is_last_duplicated {
-            self.is_last_duplicated = true;
-            out.write_all(DUPLICATE_PLACEHOLDER)?;
-            out.write_all(ROW_SEPARATOR)
-        } else {
-            Ok(())
+    fn replace_row_with_placeholder<O: Write>(&mut self, out: &mut O) -> Result<()> {
+        match self.row_state {
+            RowState::NeedsPlaceholder => {
+                self.row_state = RowState::Skipped;
+
+                out.write_all(DUPLICATE_PLACEHOLDER)?;
+                out.write_all(ROW_SEPARATOR)
+            }
+            _ => panic!("replace_row_with_placeholder(): Row does not need a placeholder"),
         }
     }
 
@@ -237,4 +255,10 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
         Ok(())
     }
+}
+
+enum RowState {
+    CanWrite,
+    NeedsPlaceholder,
+    Skipped,
 }
