@@ -105,16 +105,16 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             let ignore_dedup = self.total_written < bpr;
 
             let byte_in_row = self.total_written % bpr;
-            let to_check = min(self.cache.len() - byte_in_row, tmp.len());
+            let to_check = min(self.cache.len() - self.available, tmp.len());
 
-            let cache_part = &self.cache[byte_in_row..byte_in_row + to_check];
+            let cache_part = &self.cache[self.available..self.available + to_check];
             let should_write = ignore_dedup || &tmp[..to_check] != cache_part;
 
             if should_write {
                 self.is_last_duplicated = false;
             }
 
-            let mut cache_part = &mut self.cache[byte_in_row..byte_in_row + to_check];
+            let mut cache_part = &mut self.cache[self.available..self.available + to_check];
             if should_write {
                 tmp.read_exact(&mut cache_part)?;
             } else {
@@ -123,18 +123,17 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
             // Deduplication was previously interrupted and we continue write row
             if should_write || self.available != 0 { 
-                self.available = byte_in_row + to_check;
+                self.available += to_check;
             }
 
-            if self.cache.len() - byte_in_row - to_check == 0 {
+            if self.cache.len() - self.available == 0 {
                 if self.available != 0 {
                     self.start_row(out)?;
-                    self.byte_fmt.format(&self.cache, 0, out)?;
+                    self.total_written += self.byte_fmt.format(&self.cache, 0, out)?;
                 }
                 self.finish_row(out)?;
             }
 
-            self.total_written += to_check;
         }
 
         Ok(())
