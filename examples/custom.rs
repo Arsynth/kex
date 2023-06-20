@@ -11,6 +11,7 @@ fn main() {
         )),
         ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(4, "#"), 4),
+            "",
             false,
             Default::default(),
         ),

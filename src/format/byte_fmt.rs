@@ -8,14 +8,16 @@ pub struct ByteFormatter {
     pub(super) groupping: Groupping,
     pub(super) is_little_endian: bool,
 
+    byte_separator: Vec<u8>,
     pub(super) separators: Separators,
 }
 
 impl ByteFormatter {
-    pub fn new(groupping: Groupping, is_little_endian: bool, separators: Separators) -> Self {
+    pub fn new(groupping: Groupping, byte_separator: &str, is_little_endian: bool, separators: Separators) -> Self {
         Self {
             groupping,
             is_little_endian,
+            byte_separator: Vec::from(byte_separator),
             separators,
         }
     }
@@ -26,6 +28,7 @@ impl Default for ByteFormatter {
         Self {
             groupping: Default::default(),
             is_little_endian: false,
+            byte_separator: vec![],
             separators: Default::default(),
         }
     }
@@ -46,6 +49,7 @@ impl ByteFormatting for ByteFormatter {
 
     fn format<O: Write>(&self, bytes: &[u8], byte_number_in_row: usize, out: &mut O) -> Result<usize> {
         let gr = &self.groupping;
+        let gr_size = gr.max_group_size();
 
         let sep = gr.separator();
 
@@ -53,7 +57,8 @@ impl ByteFormatting for ByteFormatter {
 
         let mut byte_number = byte_number_in_row;
         while tmp.len() != 0 {
-            let to_format = min(tmp.len(), gr.bytes_left_in_group_after(byte_number));
+            let bytes_left_in_group = gr.bytes_left_in_group_after(byte_number);
+            let to_format = min(tmp.len(), bytes_left_in_group);
 
             let needs_separator = byte_number != 0 && gr.is_aligned_at(byte_number);
             if needs_separator {
@@ -63,13 +68,23 @@ impl ByteFormatting for ByteFormatter {
             byte_number += to_format;
 
             if to_format != 0 {
+                let mut num = gr_size - bytes_left_in_group;
+
                 if self.is_little_endian {
                     for byte in tmp[..to_format].iter().rev() {
+                        if num != 0 {
+                            out.write_all(&self.byte_separator[..])?;
+                        }
                         Self::format_byte(*byte, out)?;
+                        num += 1;
                     }
                 } else {
                     for byte in &tmp[..to_format] {
+                        if num != 0 {
+                            out.write_all(&self.byte_separator[..])?;
+                        }
                         Self::format_byte(*byte, out)?;
+                        num += 1;
                     }
                 }
             }
@@ -83,12 +98,15 @@ impl ByteFormatting for ByteFormatter {
     fn format_padding<O: Write>(&self, byte_number_in_row: usize, out: &mut O) -> Result<()> {
         let padding = b"..";
         let gr = &self.groupping;
+        let gr_size = gr.max_group_size();
+
         let sep = gr.separator();
 
         let mut tmp = gr.bytes_per_row() - byte_number_in_row;
         let mut byte_number = byte_number_in_row;
         while tmp != 0 {
-            let to_format = min(tmp, gr.bytes_left_in_group_after(byte_number));
+            let bytes_left_in_group = gr.bytes_left_in_group_after(byte_number);
+            let to_format = min(tmp, bytes_left_in_group);
 
             let needs_separator = byte_number != 0 && gr.is_aligned_at(byte_number);
             if needs_separator {
@@ -98,7 +116,17 @@ impl ByteFormatting for ByteFormatter {
             byte_number += to_format;
 
             if to_format != 0 {
-                out.write_all(&padding.repeat(to_format))?;
+                let mut num = gr_size - bytes_left_in_group;
+
+                for _ in 0..to_format {
+                    if num != 0 {
+                        out.write_all(&self.byte_separator)?;
+                    }
+                    out.write_all(padding)?;
+
+                    num += 1;
+                }
+
             }
 
             tmp -= to_format;
@@ -168,6 +196,7 @@ mod tests {
     fn test_unordered() {
         let fmt = ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(4, ""), 1),
+            "",
             false,
             Default::default(),
         );
@@ -181,6 +210,7 @@ mod tests {
 
         let fmt = ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(4, " "), 2),
+            "",
             false,
             Default::default(),
         );
@@ -216,6 +246,7 @@ mod tests {
     fn test_little_endian() {
         let fmt = ByteFormatter::new(
             Groupping::RepeatingGroup(Group::new(4, "-"), 4),
+            "",
             true,
             Default::default(),
         );
