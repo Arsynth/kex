@@ -1,5 +1,6 @@
 use super::format::*;
 
+
 /// Configuration of formatting
 #[derive(Clone)]
 pub struct Config<

@@ -12,3 +12,4 @@ description = "Library for streamed hex dumping"
 
 [dependencies]
 ascii = "1.1.0"
+getopts = "0.2.21"
