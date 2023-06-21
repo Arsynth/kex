@@ -1,6 +1,6 @@
 use super::result::*;
 use getopts::*;
-use kex::{AddressStyle, ByteStyle};
+use kex::{AddressStyle, ByteStyle, Groupping, Group};
 
 use super::AppError;
 
@@ -54,7 +54,7 @@ pub(super) fn get_configured_opts() -> Options {
     opts.optopt(
         GROUPPING_SHORT_NAME,
         "",
-        "-g 2/4\n",
+        "-g 4/4\n",
         "group_size[/num_of_groups]",
     );
 
@@ -155,6 +155,76 @@ impl FromArgStr for ByteStyle {
             'C' => Ok(Self::CaretAscii),
             _ => {
                 return Err(AppError::new(format!("{fmt_name}: Unknown address format")));
+            }
+        }
+    }
+}
+
+impl FromMatches for Groupping {
+    fn new(matches: &Matches) -> AppResult<Self>
+    where
+        Self: Sized,
+    {
+        let fmt_str = match matches.opt_get_default(GROUPPING_SHORT_NAME, "4/4".to_string()) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(AppError::new(format!("{e}")));
+            }
+        };
+
+        Self::from_arg_str(fmt_str)
+    }
+}
+
+impl FromArgStr for Groupping {
+    fn from_arg_str(fmt_str: String) -> AppResult<Self>
+    where
+        Self: Sized,
+    {
+        const DELIMITER_CHAR: char = '/';
+
+        const DEF_GROUP_SIZE: usize = 8;
+        const DEF_NGROUPS: usize = 2;
+
+        if fmt_str.contains(DELIMITER_CHAR) {
+            let mut split = fmt_str.split(DELIMITER_CHAR);
+        let group_size = split
+            .next()
+            .expect("That's not possible to have an empty argument");
+
+        let group_size = match group_size {
+            "" => DEF_GROUP_SIZE,
+            _ => match group_size.parse::<usize>() {
+                Ok(i) => i,
+                Err(e) => {
+                    return Err(AppError::new(format!("{e}")));
+                }
+            },
+        };
+
+        let n_groups = split.next();
+        let n_groups = match n_groups {
+            Some(n) => match n {
+                "" => DEF_NGROUPS,
+                _ => match n.parse::<usize>() {
+                    Ok(i) => i,
+                    Err(e) => {
+                        return Err(AppError::new(format!("{e}")));
+                    }
+                },
+            },
+            None => DEF_NGROUPS,
+        };
+
+        Ok(Groupping::RepeatingGroup(Group::new(group_size, "  "), n_groups))
+        } else {
+            match fmt_str.parse::<usize>() {
+                Ok(i) => {
+                    Ok(Groupping::RowWide(i))
+                },
+                Err(e) => {
+                    return Err(AppError::new(format!("{e}")));
+                }
             }
         }
     }

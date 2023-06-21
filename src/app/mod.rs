@@ -87,7 +87,7 @@ impl Output {
             )),
             ByteFormatter::new(
                 byte_style,
-                Groupping::RepeatingGroup(Group::new(8, "  "), 2),
+                Groupping::new(matches)?,
                 " ",
                 false,
                 Separators::new(" ", " "),
