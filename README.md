@@ -89,7 +89,7 @@ fn main() {
 See all the examples in `examples` directory in the crate root
 
 ## Documentation
-https://docs.rs/kex/0.2.0/kex/
+https://docs.rs/kex/0.2.1/kex/
 
 ## Deduplication
 ```
