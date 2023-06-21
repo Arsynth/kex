@@ -25,15 +25,7 @@ impl Default for AddressFormatter {
 
 impl AddressFormatting for AddressFormatter {
     fn format<O: Write>(&self, addr: usize, out: &mut O) -> Result<()> {
-        let result = match self.style {
-            AddressStyle::Dec(w) => {
-                format!("{:width$}", addr, width = w)
-            },
-            AddressStyle::Hex(w) => {
-                format!("{:0width$x}", addr, width = w)
-            },
-        };
-
+        let result = self.style.format(addr);
         out.write_all(result.as_bytes())
     }
 
@@ -50,6 +42,24 @@ pub enum AddressStyle {
     /// Present address as hexadecimal with specified minimum width. Formated address
     /// will be padded with zeros
     Hex(usize),
+    /// Present address as binary with specified minimum width. Formated address
+    /// will be padded with zeros
+    Bin(usize),
+    /// Present address as octal with specified minimum width. Formated address
+    /// will be padded with zeros
+    Oct(usize),
+}
+
+impl AddressStyle {
+    fn format(&self, addr: usize) -> String {
+        match self {
+            AddressStyle::Dec(w) => format!("{:width$}", addr, width = w),
+            AddressStyle::Hex(w) => format!("{:0width$x}", addr, width = w),
+            AddressStyle::Bin(w) => format!("{:0width$b}", addr, width = w),
+            AddressStyle::Oct(w) => format!("{:0width$o}", addr, width = w),
+            
+        }
+    }
 }
 
 impl Default for AddressStyle {

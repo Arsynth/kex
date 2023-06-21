@@ -9,10 +9,13 @@ use std::{
 mod result;
 pub(crate) use result::*;
 
+mod opts;
+use opts::*;
+
 pub(crate) fn get_app_config() -> AppResult<AppConfig> {
     let args = env::args().skip(1);
 
-    let opts = Options::new();
+    let opts = get_configured_opts();
 
     let matches = match opts.parse(args) {
         Ok(m) => m,
@@ -70,10 +73,10 @@ pub(crate) struct Output {
 }
 
 impl Output {
-    fn new(_matches: &Matches) -> AppResult<Self> {
+    fn new(matches: &Matches) -> AppResult<Self> {
         let config = Config::new(
             Some(AddressFormatter::new(
-                AddressStyle::Hex(8),
+                AddressStyle::new(matches)?,
                 Separators::new("", " "),
             )),
             ByteFormatter::new(
