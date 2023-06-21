@@ -10,6 +10,7 @@ fn main() {
             Separators::new("", &'\u{1F929}'.to_string()),
         )),
         ByteFormatter::new(
+            Default::default(),
             Groupping::RepeatingGroup(Group::new(4, "#"), 4),
             "",
             false,

@@ -2,9 +2,14 @@ use std::io::*;
 
 use super::*;
 
+const PLACEHOLDER: &[u8; 1] = b".";
+const SPACE: u8 = b' ';
+const CARET: u8 = b'^';
+
 /// Builtin byte formatter (used for `second` column by default)
 #[derive(Clone)]
 pub struct ByteFormatter {
+    pub(super) style: ByteStyle,
     pub(super) groupping: Groupping,
     pub(super) is_little_endian: bool,
 
@@ -13,8 +18,15 @@ pub struct ByteFormatter {
 }
 
 impl ByteFormatter {
-    pub fn new(groupping: Groupping, byte_separator: &str, is_little_endian: bool, separators: Separators) -> Self {
+    pub fn new(
+        style: ByteStyle,
+        groupping: Groupping,
+        byte_separator: &str,
+        is_little_endian: bool,
+        separators: Separators,
+    ) -> Self {
         Self {
+            style,
             groupping,
             is_little_endian,
             byte_separator: Vec::from(byte_separator),
@@ -26,6 +38,7 @@ impl ByteFormatter {
 impl Default for ByteFormatter {
     fn default() -> Self {
         Self {
+            style: Default::default(),
             groupping: Default::default(),
             is_little_endian: false,
             byte_separator: vec![],
@@ -47,7 +60,12 @@ impl ByteFormatting for ByteFormatter {
         self.groupping.clone()
     }
 
-    fn format<O: Write>(&self, bytes: &[u8], byte_number_in_row: usize, out: &mut O) -> Result<usize> {
+    fn format<O: Write>(
+        &self,
+        bytes: &[u8],
+        byte_number_in_row: usize,
+        out: &mut O,
+    ) -> Result<usize> {
         let gr = &self.groupping;
         let gr_size = gr.max_group_size();
 
@@ -75,7 +93,7 @@ impl ByteFormatting for ByteFormatter {
                         if num != 0 {
                             out.write_all(&self.byte_separator[..])?;
                         }
-                        Self::format_byte(*byte, out)?;
+                        self.style.format_byte(*byte, out)?;
                         num += 1;
                     }
                 } else {
@@ -83,7 +101,7 @@ impl ByteFormatting for ByteFormatter {
                         if num != 0 {
                             out.write_all(&self.byte_separator[..])?;
                         }
-                        Self::format_byte(*byte, out)?;
+                        self.style.format_byte(*byte, out)?;
                         num += 1;
                     }
                 }
@@ -126,7 +144,6 @@ impl ByteFormatting for ByteFormatter {
 
                     num += 1;
                 }
-
             }
 
             tmp -= to_format;
@@ -144,16 +161,108 @@ const LOWER_HEX: [u8; 16] = [
     b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
 ];
 
-impl ByteFormatter {
+const CARET_NOTATION_LUT: [u8; 32] = [
+    b'@', b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
+    b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'[', b'\\', b']', b'^',
+    b'_',
+];
+
+const CARET_NOTATION_DEL: u8 = b'?';
+
+#[derive(Clone)]
+pub enum ByteStyle {
+    Hex,
+    Bin,
+    Dec,
+    Oct,
+    Ascii,
+    CaretAscii,
+}
+
+impl ByteStyle {
     #[inline(always)]
-    fn format_byte<O: Write>(byte: u8, out: &mut O) -> Result<()> {
+    pub(super) fn format_byte<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        match self {
+            ByteStyle::Hex => self.fmt_hex(byte, out),
+            ByteStyle::Bin => self.fmt_bin(byte, out),
+            ByteStyle::Dec => self.fmt_dec(byte, out),
+            ByteStyle::Oct => self.fmt_oct(byte, out),
+            ByteStyle::Ascii => self.fmt_ascii(byte, out),
+            ByteStyle::CaretAscii => self.fmt_caret_ascii(byte, out),
+        }
+    }
+
+    pub(super) fn fmt_hex<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
         let mut buf: [u8; 2] = [0, 0];
         buf[0] = LOWER_HEX[(byte >> 4) as usize];
         buf[1] = LOWER_HEX[(byte & 0x0f) as usize];
 
         out.write_all(&buf)?;
-        
+
         Ok(())
+    }
+
+    pub(super) fn fmt_bin<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        let s = format!("{:08b}", byte);
+        out.write_all(s.as_bytes())?;
+
+        Ok(())
+    }
+
+    pub(super) fn fmt_dec<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        let s = format!("{:3}", byte);
+        out.write_all(s.as_bytes())?;
+
+        Ok(())
+    }
+
+    pub(super) fn fmt_oct<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        let s = format!("{:03o}", byte);
+        out.write_all(s.as_bytes())?;
+
+        Ok(())
+    }
+
+    pub(super) fn fmt_ascii<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        let chr = unsafe { byte.to_ascii_char_unchecked() };
+
+        if chr.is_ascii_printable() {
+            out.write_all(&vec![byte])?;
+        } else {
+            out.write(PLACEHOLDER)?;
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn fmt_caret_ascii<O: Write>(&self, byte: u8, out: &mut O) -> Result<()> {
+        let mut buf: [u8; 2] = [0, 0];
+
+        let chr = unsafe { byte.to_ascii_char_unchecked() };
+
+        if (byte as usize) < CARET_NOTATION_LUT.len() {
+            buf[0] = CARET;
+            buf[1] = CARET_NOTATION_LUT[byte as usize];
+        } else if byte == b'?' {
+            buf[0] = CARET;
+            buf[1] = CARET_NOTATION_DEL;
+        } else if chr.is_ascii_printable() {
+            buf[0] = SPACE;
+            buf[1] = byte;
+        } else {
+            buf[0] = SPACE;
+            buf[1] = PLACEHOLDER[0];
+        }
+
+        out.write_all(&buf)?;
+
+        Ok(())
+    }
+}
+
+impl Default for ByteStyle {
+    fn default() -> Self {
+        Self::Hex
     }
 }
 
@@ -195,6 +304,7 @@ mod tests {
     #[test]
     fn test_unordered() {
         let fmt = ByteFormatter::new(
+            Default::default(),
             Groupping::RepeatingGroup(Group::new(4, ""), 1),
             "",
             false,
@@ -209,6 +319,7 @@ mod tests {
         }
 
         let fmt = ByteFormatter::new(
+            Default::default(),
             Groupping::RepeatingGroup(Group::new(4, " "), 2),
             "",
             false,
@@ -245,6 +356,7 @@ mod tests {
     #[test]
     fn test_little_endian() {
         let fmt = ByteFormatter::new(
+            Default::default(),
             Groupping::RepeatingGroup(Group::new(4, "-"), 4),
             "",
             true,

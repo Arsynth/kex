@@ -74,18 +74,25 @@ pub(crate) struct Output {
 
 impl Output {
     fn new(matches: &Matches) -> AppResult<Self> {
+        let byte_style = ByteStyle::new(matches)?;
+        let char_formatter = match byte_style {
+            ByteStyle::Ascii | ByteStyle::CaretAscii => None,
+            _ => Some(CharFormatter::new(".", Separators::new(" |", "|")))
+        };
+
         let config = Config::new(
             Some(AddressFormatter::new(
                 AddressStyle::new(matches)?,
                 Separators::new("", " "),
             )),
             ByteFormatter::new(
+                byte_style,
                 Groupping::RepeatingGroup(Group::new(8, "  "), 2),
                 " ",
                 false,
                 Separators::new(" ", " "),
             ),
-            Some(CharFormatter::new(".", Separators::new(" |", "|"))),
+            char_formatter,
             true,
         );
 

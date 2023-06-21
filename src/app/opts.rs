@@ -1,6 +1,6 @@
-use getopts::*;
 use super::result::*;
-use kex::AddressStyle;
+use getopts::*;
+use kex::{AddressStyle, ByteStyle};
 
 use super::AppError;
 
@@ -81,19 +81,21 @@ impl FromMatches for AddressStyle {
 
         Self::from_arg_str(fmt_str)
     }
-    
 }
 
 trait FromArgStr {
-    fn from_arg_str(fmt_str: String) -> AppResult<Self> where Self: Sized;
+    fn from_arg_str(fmt_str: String) -> AppResult<Self>
+    where
+        Self: Sized;
 }
 
 impl FromArgStr for AddressStyle {
-
     fn from_arg_str(fmt_str: String) -> AppResult<Self> {
         let mut fmt_chars = fmt_str.chars();
-        let fmt_name = fmt_chars.next().expect("That's not possible to have an empty argument");
-        
+        let fmt_name = fmt_chars
+            .next()
+            .expect("That's not possible to have an empty argument");
+
         let rem = String::from_iter(fmt_chars);
         let min_width = if rem.len() != 0 {
             match rem.parse::<usize>() {
@@ -111,7 +113,49 @@ impl FromArgStr for AddressStyle {
             'b' => Ok(AddressStyle::Bin(min_width)),
             'd' => Ok(AddressStyle::Dec(min_width)),
             'o' => Ok(AddressStyle::Oct(min_width)),
-            _ => { return Err(AppError::new(format!("{fmt_name}: Unknown address format"))); },
+            _ => {
+                return Err(AppError::new(format!("{fmt_name}: Unknown address format")));
+            }
+        }
+    }
+}
+
+impl FromMatches for ByteStyle {
+    fn new(matches: &Matches) -> AppResult<Self>
+    where
+        Self: Sized,
+    {
+        let fmt_str = match matches.opt_get_default(BYTE_FORMAT_SHORT_NAME, "h".to_string()) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(AppError::new(format!("{e}")));
+            }
+        };
+
+        Self::from_arg_str(fmt_str)
+    }
+}
+
+impl FromArgStr for ByteStyle {
+    fn from_arg_str(fmt_str: String) -> AppResult<Self>
+    where
+        Self: Sized,
+    {
+        let mut fmt_chars = fmt_str.chars();
+        let fmt_name = fmt_chars
+            .next()
+            .expect("That's not possible to have an empty argument");
+
+        match fmt_name {
+            'h' => Ok(Self::Hex),
+            'b' => Ok(Self::Bin),
+            'd' => Ok(Self::Dec),
+            'o' => Ok(Self::Oct),
+            'c' => Ok(Self::Ascii),
+            'C' => Ok(Self::CaretAscii),
+            _ => {
+                return Err(AppError::new(format!("{fmt_name}: Unknown address format")));
+            }
         }
     }
 }
