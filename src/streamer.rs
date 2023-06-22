@@ -101,11 +101,13 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let bpr = gr.bytes_per_row();
 
         while tmp.len() != 0 {
-            match self.row_state {
-                RowState::CanWrite => {
-                    self.row_state = RowState::NeedsPlaceholder;
+            if !self.last_row_changed {
+                match self.row_state {
+                    RowState::CanWrite => {
+                        self.row_state = RowState::NeedsPlaceholder;
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
 
             let ignore_dedup = self.total_written < bpr;
@@ -147,7 +149,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
     pub(crate) fn write_tail<O: Write>(&mut self, out: &mut O) -> Result<()> {
         if self.dedup_enabled {
-            self.write_current_offset(out)?;
+            self.start_row(out)?;
         }
 
         if self.available == 0 {
@@ -209,20 +211,16 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     }
 
     fn finish_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        match self.row_state {
-            RowState::CanWrite => {
-                self.byte_fmt.format_padding(self.available, out)?;
-
-                out.write_all(&self.byte_fmt.separators().leading)?;
-
-                self.write_text(out)?;
-
-                out.write_all(ROW_SEPARATOR)?;
-            }
-            RowState::NeedsPlaceholder => {
-                self.replace_row_with_placeholder(out)?;
-            }
-            RowState::Skipped => (),
+        if self.last_row_changed {
+            self.byte_fmt.format_padding(self.available, out)?;
+    
+            out.write_all(&self.byte_fmt.separators().leading)?;
+    
+            self.write_text(out)?;
+    
+            out.write_all(ROW_SEPARATOR)?;
+        } else if let RowState::NeedsPlaceholder = self.row_state {
+            self.replace_row_with_placeholder(out)?;
         }
 
         self.available = 0;

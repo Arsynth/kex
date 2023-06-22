@@ -2,8 +2,7 @@ use getopts::*;
 use kex::*;
 use std::env;
 use std::{
-    fs::File,
-    io::{stdin, stdout, Read, Stdin, Stdout, Write},
+    io::{stdout, Stdout, Write},
 };
 
 mod result;
@@ -42,28 +41,18 @@ impl AppConfig {
 }
 
 pub(crate) enum Input {
-    File(File),
-    Stdin(Stdin),
+    Files(Vec<String>),
+    Stdin,
 }
 
 impl Input {
     fn new(matches: &Matches) -> AppResult<Self> {
-        let free_args = &matches.free;
+        let free_args = matches.free.clone();
 
         if free_args.len() != 0 {
-            let file = File::open(free_args[0].clone())?;
-            Ok(Input::File(file))
+            Ok(Input::Files(free_args))
         } else {
-            Ok(Input::Stdin(stdin()))
-        }
-    }
-}
-
-impl Read for Input {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self {
-            Input::File(f) => f.read(buf),
-            Input::Stdin(i) => i.lock().read(buf),
+            Ok(Input::Stdin)
         }
     }
 }

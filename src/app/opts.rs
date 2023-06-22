@@ -34,6 +34,9 @@ pub(super) const BYTE_FORMAT_SHORT_NAME: &str = "b";
 /// -g 8 - ab ac ad ae af b0 af b1
 pub(super) const GROUPPING_SHORT_NAME: &str = "g";
 
+const DEF_GROUP_SIZE: usize = 8;
+const DEF_NGROUPS: usize = 2;
+
 pub(super) fn get_configured_opts() -> Options {
     let mut opts = Options::new();
 
@@ -165,7 +168,7 @@ impl FromMatches for Groupping {
     where
         Self: Sized,
     {
-        let fmt_str = match matches.opt_get_default(GROUPPING_SHORT_NAME, "4/4".to_string()) {
+        let fmt_str = match matches.opt_get_default(GROUPPING_SHORT_NAME, format!("{DEF_GROUP_SIZE}/{DEF_NGROUPS}")) {
             Ok(s) => s,
             Err(e) => {
                 return Err(AppError::new(format!("{e}")));
@@ -182,9 +185,6 @@ impl FromArgStr for Groupping {
         Self: Sized,
     {
         const DELIMITER_CHAR: char = '/';
-
-        const DEF_GROUP_SIZE: usize = 8;
-        const DEF_NGROUPS: usize = 2;
 
         if fmt_str.contains(DELIMITER_CHAR) {
             let mut split = fmt_str.split(DELIMITER_CHAR);
