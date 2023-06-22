@@ -15,7 +15,9 @@ Streamed hex dumping library.
 # Binary
 ## Short guide
 
-kex /bin/cat -a h8 -b h -g 8/2
+kex -a h8 -b h -g 8/2 file1 file2 file3 ...
+
+Will print specified files sequentally as single stream. If no files specified, program will expect input from `stdin`
 
 ### Arguments
 
@@ -89,7 +91,7 @@ fn main() {
 See all the examples in `examples` directory in the crate root
 
 ## Documentation
-https://docs.rs/kex/0.2.1/kex/
+https://docs.rs/kex/0.2.2/kex/
 
 ## Deduplication
 ```
