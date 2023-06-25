@@ -50,7 +50,13 @@ impl<
     pub fn new(out: O, start_address: usize, config: Config<A, B, C>) -> Printer<O, A, B, C> {
         Printer {
             out: Some(out),
-            streamer: Streamer::new(config.addr, config.byte, config.text, start_address, config.dedup_enabled),
+            streamer: Streamer::new(
+                config.addr,
+                config.byte,
+                config.text,
+                start_address,
+                config.dedup_enabled,
+            ),
             is_finished: false,
         }
     }
@@ -133,8 +139,9 @@ impl<
         self.push(buf)
     }
 
+    /// Does nothing. Always returns `Ok(())`
     fn flush(&mut self) -> Result<()> {
-        self.print_last_line()
+        Ok(())
     }
 }
 
@@ -147,5 +154,98 @@ impl<
 {
     fn drop(&mut self) {
         _ = self.print_last_line();
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn simple() {
+        let result = vec![];
+        let mut printer = Printer::default_fmt_with(result, 0);
+
+        let bytes1 = &[222u8, 173, 190, 239];
+        let bytes2 = &[0xfeu8, 0xed, 0xfa];
+        let title = b"Simple printing";
+
+        for _ in 0..10 {
+            _ = printer.push(bytes1);
+        }
+
+        _ = printer.push(title);
+
+        for _ in 0..11 {
+            _ = printer.push(bytes2);
+        }
+
+        let result = printer.finish();
+        let result_str = String::from_utf8(result).expect("Invalid characters in result");
+
+        let expected = "00000000 deadbeef deadbeef deadbeef deadbeef |................|
+*
+00000020 deadbeef deadbeef 53696d70 6c652070 |........Simple p|
+00000030 72696e74 696e67fe edfafeed fafeedfa |rinting.........|
+00000040 feedfafe edfafeed fafeedfa feedfafe |................|
+00000050 edfafeed fafeedfa ........ ........ |........        |
+00000058 \n";
+
+        assert_eq!(result_str, expected);
+    }
+
+    #[test]
+    fn always_equal() {
+        let patterns = vec![
+            vec![1],
+            vec![1, 2, 1],
+            vec![5],
+            vec![4],
+            vec![4, 7],
+            vec![4, 1],
+            vec![18, 1, 16, 7, 4, 5, 3],
+            vec![2000],
+            vec![444],
+        ];
+        let test_data =
+            std::fs::read("testable/lorem_ipsum").expect("Could not opent testable data");
+
+        let mut last_result: Option<String> = None;
+
+        for pat in patterns {
+            let result = string_with(&test_data, pat);
+            if let Some(last_result) = last_result {
+                assert_eq!(result, last_result);
+            }
+
+            last_result = Some(result);
+        }
+    }
+
+    fn string_with(bytes: &[u8], read_len_pattern: Vec<usize>) -> String {
+        use std::cmp::min;
+
+        let result = vec![];
+        let mut printer = Printer::default_fmt_with(result, 0);
+
+        let mut tmp = bytes;
+
+        let mut pat_idx = 0;
+        while tmp.len() != 0 {
+            let to_read = min(read_len_pattern[pat_idx], tmp.len());
+            println!("To read: {to_read}");
+
+            printer
+                .write(&tmp[..to_read])
+                .expect("Writing to printer error");
+
+            tmp = &tmp[to_read..];
+
+            pat_idx += 1;
+            pat_idx %= read_len_pattern.len();
+        }
+
+        let result = printer.finish();
+        String::from_utf8(result).expect("Invalid characters in result")
     }
 }
