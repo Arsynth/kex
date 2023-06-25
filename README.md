@@ -1,4 +1,5 @@
 # kex
+![](https://github.com/Arsynth/kex/actions/workflows/ci.yml/badge.svg)
 
 Streamed hex dumping library.
 
@@ -91,7 +92,7 @@ fn main() {
 See all the examples in `examples` directory in the crate root
 
 ## Documentation
-https://docs.rs/kex/0.2.2/kex/
+https://docs.rs/kex/0.2.3/kex/
 
 ## Deduplication
 ```
