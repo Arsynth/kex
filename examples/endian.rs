@@ -32,10 +32,10 @@ fn print_data_per_byte(data: &[u8], is_little_endian: bool) {
             Default::default()
         ),
         Some(CharFormatter::default()),
-        false,
+        true,
     );
 
-    let mut printer = Printer::new(Box::new(stdout()), 0 as usize, config);
+    let mut printer = Printer::new(stdout(), 0 as usize, config);
 
     
     for s in data {

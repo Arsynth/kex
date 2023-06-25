@@ -4,7 +4,7 @@ use kex::*;
 fn main() {
     use std::io::stdout;
 
-    let mut printer = Printer::default_fmt_with(Box::new(stdout()), 0);
+    let mut printer = Printer::default_fmt_with(stdout(), 0);
 
     let bytes1 = &[222u8, 173, 190, 239];
     let bytes2 = &[0xfeu8, 0xed, 0xfa];

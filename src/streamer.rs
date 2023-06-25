@@ -9,7 +9,7 @@ pub(super) struct Streamer<A: AddressFormatting, B: ByteFormatting, C: CharForma
     byte_fmt: B,
     char_fmt: Option<C>,
 
-    total_written: usize,
+    total_formatted: usize,
     printable_offset: usize,
 
     cache: Vec<u8>,
@@ -33,7 +33,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             addr_fmt,
             byte_fmt,
             char_fmt,
-            total_written: 0,
+            total_formatted: 0,
             printable_offset,
             cache: vec![0u8; bpr],
             available: 0,
@@ -60,7 +60,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let group_size = gr.max_group_size();
 
         while tmp.len() != 0 {
-            let byte_in_row = self.total_written % bpr;
+            let byte_in_row = self.total_formatted % bpr;
 
             if self.available == 0 {
                 self.start_row(out)?;
@@ -81,7 +81,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 
             // Start reading from cache
             if group_cache.len() != 0 {
-                self.total_written += self.byte_fmt.format(group_cache, byte_in_row, out)?;
+                self.total_formatted += self.byte_fmt.format(group_cache, byte_in_row, out)?;
             }
 
             // Finish row
@@ -110,7 +110,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
                 }
             }
 
-            let ignore_dedup = self.total_written < bpr;
+            let ignore_dedup = self.total_formatted < bpr;
 
             let to_check = min(self.cache.len() - self.available, tmp.len());
 
@@ -132,10 +132,11 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             if self.cache.len() - self.available == 0 {
                 if self.last_row_changed {
                     self.start_row(out)?;
-                    self.total_written += self.byte_fmt.format(&self.cache, 0, out)?;
+                    self.total_formatted += self.byte_fmt.format(&self.cache, 0, out)?;
                     self.row_state = RowState::CanWrite;
                 } else {
-                    self.total_written += self.cache.len();
+                    // We suppose what duplicate bytes formatted too
+                    self.total_formatted += self.cache.len();
                 }
 
                 self.finish_row(out)?;
@@ -157,19 +158,20 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             return Ok(());
         }
 
-        let written_in_row = self.total_written % self.byte_fmt.groupping().bytes_per_row();
+        let bpr = self.byte_fmt.groupping().bytes_per_row();
+        let formatted_in_row = self.total_formatted % bpr;
         assert!(
-            self.available >= written_in_row,
+            self.available >= formatted_in_row,
             "Bytes written more than available"
         );
 
-        let remaining = &self.cache[written_in_row..self.available];
-        self.total_written += self.byte_fmt.format(remaining, written_in_row, out)?;
-
+        let remaining = &self.cache[formatted_in_row..self.available];
+        self.total_formatted += self.byte_fmt.format(remaining, formatted_in_row, out)?;
+        
         self.finish_row(out)?;
-
+        
         self.write_current_offset(out)?;
-
+        
         out.write_all(ROW_SEPARATOR)?;
 
         Ok(())
@@ -203,7 +205,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     fn write_current_offset<O: Write>(&self, out: &mut O) -> Result<()> {
         if let Some(fmt) = &self.addr_fmt {
             out.write_all(&fmt.separators().trailing)?;
-            fmt.format(self.total_written + self.printable_offset, out)?;
+            fmt.format(self.total_formatted + self.printable_offset, out)?;
             out.write_all(&fmt.separators().leading)?;
         }
 
@@ -211,7 +213,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     }
 
     fn finish_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        if self.last_row_changed {
+        if self.last_row_changed || !self.dedup_enabled {
             self.byte_fmt.format_padding(self.available, out)?;
     
             out.write_all(&self.byte_fmt.separators().leading)?;
@@ -219,9 +221,13 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             self.write_text(out)?;
     
             out.write_all(ROW_SEPARATOR)?;
+
+            self.last_row_changed = false;
         } else if let RowState::NeedsPlaceholder = self.row_state {
             self.replace_row_with_placeholder(out)?;
         }
+
+        self.row_state = RowState::CanWrite;
 
         self.available = 0;
         Ok(())

@@ -22,7 +22,7 @@ fn main() {
         )),
         true
     );
-    let mut printer = Printer::new(Box::new(stdout()), 0, config);
+    let mut printer = Printer::new(stdout(), 0, config);
 
     let bytes1 = &[222u8, 173, 190, 239];
     let bytes2 = &[0xfeu8, 0xed, 0xfa];

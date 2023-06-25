@@ -1,5 +1,7 @@
 # kex
 ![](https://github.com/Arsynth/kex/actions/workflows/ci.yml/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/kex.svg)](https://crates.io/crates/kex)
+[![Documentation](https://docs.rs/kex/badge.svg)](https://docs.rs/kex/latest/kex/)
 
 Streamed hex dumping library.
 

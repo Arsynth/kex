@@ -17,7 +17,7 @@ fn main() {
     let stdin = std::io::stdin();
     let mut handle = stdin.lock();
     
-    let mut printer = Printer::default_fmt_with(Box::new(stdout()), 0);
+    let mut printer = Printer::default_fmt_with(stdout(), 0);
 
     while let Ok(size) = handle.read(&mut buf) {
         if size == 0 {
