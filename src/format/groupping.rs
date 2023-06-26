@@ -3,12 +3,12 @@ pub const DEFAULT_GROUP_SIZE: usize = 4;
 pub const DEFAULT_NUMBER_OF_GROUPS: usize = 4;
 
 /// Requirement for providing byte portions
-pub enum ByteOrder {
+pub enum GroupAtomicity {
     /// Bytes will be provided in portions strictly according to grouping.
     /// In that case, buffering will be used
-    Strict,
-    /// Bytes will be provided as soon as new data available in [`super::Printer`]
-    Relaxed,
+    Required,
+    /// Bytes will be provided as soon as new data available in [`crate::Printer`]
+    Optional,
 }
 
 /// Byte formatting style
@@ -91,6 +91,7 @@ impl Default for Groupping {
     }
 }
 
+/// Group of bytes, separated by arbitary printable characters
 #[derive(Clone)]
 pub struct Group {
     /// Number of bytes in the group
@@ -99,6 +100,11 @@ pub struct Group {
 }
 
 impl Group {
+    /// Create group.
+    /// 
+    /// `size` - group width in bytes.
+    /// 
+    /// `separator` - separating chars between groups.
     pub fn new(size: usize, separator: &str) -> Self {
         Self {
             size,

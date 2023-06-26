@@ -17,7 +17,6 @@ pub(super) struct Streamer<A: AddressFormatting, B: ByteFormatting, C: CharForma
 
     dedup_enabled: bool,
     row_state: RowState,
-    last_row_changed: bool,
 }
 
 impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, C> {
@@ -38,8 +37,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             cache: vec![0u8; bpr],
             available: 0,
             dedup_enabled,
-            row_state: RowState::CanWrite,
-            last_row_changed: false,
+            row_state: RowState::Changed,
         }
     }
 
@@ -101,15 +99,6 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
         let bpr = gr.bytes_per_row();
 
         while tmp.len() != 0 {
-            if !self.last_row_changed {
-                match self.row_state {
-                    RowState::CanWrite => {
-                        self.row_state = RowState::NeedsPlaceholder;
-                    }
-                    _ => (),
-                }
-            }
-
             let ignore_dedup = self.total_formatted < bpr;
 
             let to_check = min(self.cache.len() - self.available, tmp.len());
@@ -117,7 +106,9 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             let cache_part = &self.cache[self.available..self.available + to_check];
             let should_write = ignore_dedup || &tmp[..to_check] != cache_part;
 
-            self.last_row_changed |= should_write;
+            if should_write {
+                self.row_state = RowState::Changed;
+            }
 
             let mut cache_part = &mut self.cache[self.available..self.available + to_check];
             if should_write {
@@ -130,18 +121,19 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
             self.available += to_check;
 
             if self.cache.len() - self.available == 0 {
-                if self.last_row_changed {
-                    self.start_row(out)?;
-                    self.total_formatted += self.byte_fmt.format(&self.cache, 0, out)?;
-                    self.row_state = RowState::CanWrite;
-                } else {
-                    // We suppose what duplicate bytes formatted too
-                    self.total_formatted += self.cache.len();
+                match self.row_state {
+                    RowState::Changed => {
+                        self.start_row(out)?;
+                        self.total_formatted += self.byte_fmt.format(&self.cache, 0, out)?;
+                        self.row_state = RowState::Changed;
+                    },
+                    RowState::NeedsPlaceholder | RowState::Skipped => {
+                        // We suppose what duplicate bytes formatted too
+                        self.total_formatted += self.cache.len();
+                    },
                 }
 
                 self.finish_row(out)?;
-
-                self.last_row_changed = false;
             }
         }
 
@@ -213,7 +205,7 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     }
 
     fn finish_row<O: Write>(&mut self, out: &mut O) -> Result<()> {
-        if self.last_row_changed || !self.dedup_enabled {
+        if self.row_state.is_changed() || !self.dedup_enabled {
             self.byte_fmt.format_padding(self.available, out)?;
     
             out.write_all(&self.byte_fmt.separators().leading)?;
@@ -222,12 +214,10 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
     
             out.write_all(ROW_SEPARATOR)?;
 
-            self.last_row_changed = false;
+            self.row_state = RowState::NeedsPlaceholder;
         } else if let RowState::NeedsPlaceholder = self.row_state {
             self.replace_row_with_placeholder(out)?;
         }
-
-        self.row_state = RowState::CanWrite;
 
         self.available = 0;
         Ok(())
@@ -262,7 +252,16 @@ impl<A: AddressFormatting, B: ByteFormatting, C: CharFormatting> Streamer<A, B, 
 }
 
 enum RowState {
-    CanWrite,
+    Changed,
     NeedsPlaceholder,
     Skipped,
+}
+
+impl RowState {
+    fn is_changed(&self) -> bool {
+        match self {
+            RowState::Changed => true,
+            _ => false
+        }
+    }
 }

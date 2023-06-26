@@ -8,6 +8,7 @@ pub struct Config<
     B: ByteFormatting + Clone,
     C: CharFormatting + Clone,
 > {
+    
     pub(super) addr: Option<A>,
     pub(super) byte: B,
     pub(super) text: Option<C>,
@@ -18,8 +19,15 @@ pub struct Config<
 impl<A: AddressFormatting + Clone, B: ByteFormatting + Clone, C: CharFormatting + Clone>
     Config<A, B, C>
 {
-    /// Create new config.
-    /// `bytes_per_row` should be greater than zero, otherwise it defaults to [`DEFAULT_BYTES_PER_ROW`]
+    /// Create a new config.
+    ///
+    /// `address_format` - address formatter, used for printing address in the start of each row.
+    /// 
+    /// `byte_format` - byte formatter, used for printing raw data .
+    /// 
+    /// `text_format` - ascii formatter, used for printing ascii characters in the end of each row.
+    /// 
+    /// `dedup_enabled` - row deduplication mode. If `true`, single or multiple duplicated rows will be replaced by single wildcard. 
     pub fn new(
         address_format: Option<A>,
         byte_format: B,

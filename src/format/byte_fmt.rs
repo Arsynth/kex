@@ -48,11 +48,11 @@ impl Default for ByteFormatter {
 }
 
 impl ByteFormatting for ByteFormatter {
-    fn byte_order(&self) -> ByteOrder {
+    fn byte_order(&self) -> GroupAtomicity {
         if self.is_little_endian {
-            ByteOrder::Strict
+            GroupAtomicity::Required
         } else {
-            ByteOrder::Relaxed
+            GroupAtomicity::Optional
         }
     }
 

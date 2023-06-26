@@ -10,8 +10,8 @@ pub use byte_fmt::*;
 pub mod char_fmt;
 pub use char_fmt::*;
 
-pub mod ordering;
-pub use ordering::*;
+pub mod groupping;
+pub use groupping::*;
 
 use std::io::Result;
 
@@ -22,10 +22,10 @@ pub trait AddressFormatting {
     fn separators(&self) -> &Separators;
 }
 
-/// Used for bytes formatting (both for `second` and `third` columns)
+/// Used for raw bytes formatting
 pub trait ByteFormatting {
     /// Requirement for byte portions passing in the `format(...)` function
-    fn byte_order(&self) -> ByteOrder;
+    fn byte_order(&self) -> GroupAtomicity;
 
     fn groupping(&self) -> Groupping;
 

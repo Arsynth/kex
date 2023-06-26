@@ -2,7 +2,7 @@ use std::{fmt::Display};
 
 use super::*;
 
-/// Builtin byte formatter (used for `third` column by default)
+/// Builtin ascii characters formatter
 #[derive(Clone)]
 pub struct CharFormatter {
     placeholder: Vec<u8>,
