@@ -195,7 +195,15 @@ mod test {
     }
 
     #[test]
-    fn always_equal() {
+    fn stable_reading() {
+        println!("Testing reading stability");
+        stable_reading_with("testable/lorem_ipsum");
+        stable_reading_with("testable/duplications");
+    }
+    
+    fn stable_reading_with(path: &str) {
+        println!("Path: {path}");
+
         let patterns = vec![
             vec![1],
             vec![1, 2, 1],
@@ -208,16 +216,16 @@ mod test {
             vec![444],
         ];
         let test_data =
-            std::fs::read("testable/lorem_ipsum").expect("Could not opent testable data");
-
+            std::fs::read(path).expect("Could not opent testable data");
+    
         let mut last_result: Option<String> = None;
-
+    
         for pat in patterns {
             let result = string_with(&test_data, pat);
             if let Some(last_result) = last_result {
                 assert_eq!(result, last_result);
             }
-
+    
             last_result = Some(result);
         }
     }
@@ -233,7 +241,6 @@ mod test {
         let mut pat_idx = 0;
         while tmp.len() != 0 {
             let to_read = min(read_len_pattern[pat_idx], tmp.len());
-            println!("To read: {to_read}");
 
             printer
                 .write(&tmp[..to_read])
@@ -247,5 +254,27 @@ mod test {
 
         let result = printer.finish();
         String::from_utf8(result).expect("Invalid characters in result")
+    }
+
+    #[test]
+    fn duplications() {
+        let result = string_with_file("testable/duplications");
+        let expected = "00000000 61626364 65666768 696a6b6c 6d6e6f70 |abcdefghijklmnop|
+00000010 61626364 65666768 69316b6c 6d6e6f70 |abcdefghi1klmnop|
+00000020 61626364 65666768 696a6b6c 6d6e6f70 |abcdefghijklmnop|
+*
+00000040 61626364 65666768 696a6b6c 6d6e6f67 |abcdefghijklmnog|
+00000050 61626364 65666768 6935366c 6d6e6f70 |abcdefghi56lmnop|
+00000060 61626364 65666768 696a6b6c 6d6e6f70 |abcdefghijklmnop|
+*
+000000e0 \n";
+
+        assert_eq!(result, expected);
+    }
+
+    fn string_with_file(path: &str) -> String {
+        let test_data =
+            std::fs::read(path).expect("Could not opent testable data");
+        string_with(&test_data, vec![100])
     }
 }
