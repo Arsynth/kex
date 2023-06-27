@@ -1,8 +1,8 @@
 //! Module contains structures, that describing a byte groupping
 
 pub const DEFAULT_BYTES_PER_ROW: usize = 16;
-pub const DEFAULT_GROUP_SIZE: usize = 8;
-pub const DEFAULT_NUMBER_OF_GROUPS: usize = 2;
+pub const DEFAULT_GROUP_SIZE: usize = 4;
+pub const DEFAULT_NUMBER_OF_GROUPS: usize = 4;
 
 /// Requirement for providing byte portions
 pub enum GroupAtomicity {
