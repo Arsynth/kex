@@ -1,4 +1,5 @@
-//! `kex` - library for streamed hex dumping
+//! `kex` - library for streamed hex dumping.
+//! Fully static for performance purpose 
 
 use std::io::*;
 

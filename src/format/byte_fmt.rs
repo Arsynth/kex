@@ -1,3 +1,5 @@
+//! Module with builtin raw bytes formatter
+
 use std::io::*;
 
 use super::*;

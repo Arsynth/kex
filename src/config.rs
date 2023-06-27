@@ -1,5 +1,6 @@
-use super::format::*;
+//! Module with printing configuration structure
 
+use super::format::*;
 
 /// Configuration of formatting
 #[derive(Clone)]

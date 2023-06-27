@@ -1,3 +1,5 @@
+//! Formatting traits collection, including builtin formatters
+
 use ascii::*;
 use std::{cmp::min, io::Write};
 
@@ -15,7 +17,7 @@ pub use groupping::*;
 
 use std::io::Result;
 
-/// Used for address formatting (`first` column)
+/// Used for row offset formatting
 pub trait AddressFormatting {
     fn format<O: Write>(&self, addr: usize, out: &mut O) -> Result<()>;
 
@@ -57,6 +59,7 @@ pub trait ByteFormatting {
     fn separators(&self) -> &Separators;
 }
 
+/// Used for printable ASCII characters formatting
 pub trait CharFormatting {
     fn format<O: Write>(&self, bytes: &[u8], out: &mut O) -> Result<usize>;
     fn format_padding<O: Write>(&self, byte_count: usize, out: &mut O) -> Result<()>;
@@ -64,6 +67,7 @@ pub trait CharFormatting {
     fn separators(&self) -> &Separators;
 }
 
+/// Column separators, used by [crate::Printer]
 #[derive(Clone)]
 pub struct Separators {
     pub(crate) trailing: Vec<u8>,

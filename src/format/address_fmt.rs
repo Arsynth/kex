@@ -1,4 +1,6 @@
 
+//! Module with builtin offset formatter
+
 use super::*;
 
 /// Builtin address formatter

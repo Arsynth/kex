@@ -1,3 +1,5 @@
+//! Module with builtin ASCII char formatter
+
 use std::{fmt::Display};
 
 use super::*;
