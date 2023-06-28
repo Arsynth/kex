@@ -93,9 +93,6 @@ fn main() {
 
 See all the examples in `examples` directory in the crate root
 
-## Documentation
-https://docs.rs/kex/0.2.3/kex/
-
 ## Deduplication
 ```
 0000000000000000 cafebabe 00000002 01000007 00000003 |................|
