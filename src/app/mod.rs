@@ -11,6 +11,8 @@ pub(crate) use result::*;
 mod opts;
 use opts::*;
 
+pub(crate) use opts::ContentRange;
+
 pub(crate) fn get_app_config() -> AppResult<AppConfig> {
     let args = env::args().skip(1);
 
@@ -34,25 +36,42 @@ pub(crate) struct AppConfig {
 impl AppConfig {
     fn new(matches: Matches) -> AppResult<Self> {
         let input = Input::new(&matches)?;
-        let output = Output::new(&matches)?;
+        let output = Output::new(&matches, input.range.skip)?;
 
         Ok(Self { input, output })
     }
 }
 
-pub(crate) enum Input {
-    Files(Vec<String>),
-    Stdin,
+pub(crate) struct Input {
+    pub(crate) range: ContentRange,
+    pub(crate) content: Content,
 }
 
 impl Input {
     fn new(matches: &Matches) -> AppResult<Self> {
+        let range = ContentRange::new(matches)?;
+        let content = Content::new(matches)?;
+
+        Ok(Self {
+            range,
+            content,
+        })
+    }
+}
+
+pub(crate) enum Content {
+    Files(Vec<String>),
+    Stdin,
+}
+
+impl Content {
+    fn new(matches: &Matches) -> AppResult<Self> {
         let free_args = matches.free.clone();
 
         if free_args.len() != 0 {
-            Ok(Input::Files(free_args))
+            Ok(Content::Files(free_args))
         } else {
-            Ok(Input::Stdin)
+            Ok(Content::Stdin)
         }
     }
 }
@@ -62,7 +81,7 @@ pub(crate) struct Output {
 }
 
 impl Output {
-    fn new(matches: &Matches) -> AppResult<Self> {
+    fn new(matches: &Matches, offset: usize) -> AppResult<Self> {
         let byte_style = ByteStyle::new(matches)?;
         let char_formatter = match byte_style {
             ByteStyle::Ascii | ByteStyle::CaretAscii => None,
@@ -86,7 +105,7 @@ impl Output {
         );
 
         Ok(Self {
-            printer: Printer::new(stdout(), 0, config),
+            printer: Printer::new(stdout(), offset, config),
         })
     }
 }

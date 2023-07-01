@@ -1,6 +1,6 @@
 use super::result::*;
 use getopts::*;
-use kex::{AddressStyle, ByteStyle, Groupping, Group};
+use kex::{AddressStyle, ByteStyle, Group, Groupping};
 
 use super::AppError;
 
@@ -34,6 +34,9 @@ pub(super) const BYTE_FORMAT_SHORT_NAME: &str = "b";
 /// -g 8 - ab ac ad ae af b0 af b1
 pub(super) const GROUPPING_SHORT_NAME: &str = "g";
 
+pub(super) const SKIP_SHORT_NAME: &str = "s";
+pub(super) const N_BYTES_SHORT_NAME: &str = "n";
+
 const DEF_GROUP_SIZE: usize = 8;
 const DEF_NGROUPS: usize = 2;
 
@@ -59,6 +62,20 @@ pub(super) fn get_configured_opts() -> Options {
         "",
         "-g 4/4\n",
         "group_size[/num_of_groups]",
+    );
+
+    opts.optopt(
+        SKIP_SHORT_NAME,
+        "",
+        "Number of bytes to skip",
+        "POSITIVE_INTEGER",
+    );
+
+    opts.optopt(
+        N_BYTES_SHORT_NAME,
+        "",
+        "Number of bytes to read",
+        "POSITIVE_INTEGER",
     );
 
     opts
@@ -168,7 +185,10 @@ impl FromMatches for Groupping {
     where
         Self: Sized,
     {
-        let fmt_str = match matches.opt_get_default(GROUPPING_SHORT_NAME, format!("{DEF_GROUP_SIZE}/{DEF_NGROUPS}")) {
+        let fmt_str = match matches.opt_get_default(
+            GROUPPING_SHORT_NAME,
+            format!("{DEF_GROUP_SIZE}/{DEF_NGROUPS}"),
+        ) {
             Ok(s) => s,
             Err(e) => {
                 return Err(AppError::new(format!("{e}")));
@@ -188,44 +208,74 @@ impl FromArgStr for Groupping {
 
         if fmt_str.contains(DELIMITER_CHAR) {
             let mut split = fmt_str.split(DELIMITER_CHAR);
-        let group_size = split
-            .next()
-            .expect("That's not possible to have an empty argument");
+            let group_size = split
+                .next()
+                .expect("That's not possible to have an empty argument");
 
-        let group_size = match group_size {
-            "" => DEF_GROUP_SIZE,
-            _ => match group_size.parse::<usize>() {
-                Ok(i) => i,
-                Err(e) => {
-                    return Err(AppError::new(format!("{e}")));
-                }
-            },
-        };
-
-        let n_groups = split.next();
-        let n_groups = match n_groups {
-            Some(n) => match n {
-                "" => DEF_NGROUPS,
-                _ => match n.parse::<usize>() {
+            let group_size = match group_size {
+                "" => DEF_GROUP_SIZE,
+                _ => match group_size.parse::<usize>() {
                     Ok(i) => i,
                     Err(e) => {
                         return Err(AppError::new(format!("{e}")));
                     }
                 },
-            },
-            None => DEF_NGROUPS,
-        };
+            };
 
-        Ok(Groupping::RepeatingGroup(Group::new(group_size, "  "), n_groups))
+            let n_groups = split.next();
+            let n_groups = match n_groups {
+                Some(n) => match n {
+                    "" => DEF_NGROUPS,
+                    _ => match n.parse::<usize>() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            return Err(AppError::new(format!("{e}")));
+                        }
+                    },
+                },
+                None => DEF_NGROUPS,
+            };
+
+            Ok(Groupping::RepeatingGroup(
+                Group::new(group_size, "  "),
+                n_groups,
+            ))
         } else {
             match fmt_str.parse::<usize>() {
-                Ok(i) => {
-                    Ok(Groupping::RowWide(i))
-                },
+                Ok(i) => Ok(Groupping::RowWide(i)),
                 Err(e) => {
                     return Err(AppError::new(format!("{e}")));
                 }
             }
         }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ContentRange {
+    pub(crate) skip: usize,
+    pub(crate) len: Option<usize>,
+}
+
+impl FromMatches for ContentRange {
+    fn new(matches: &Matches) -> AppResult<Self>
+    where
+        Self: Sized,
+    {
+        let skip = match matches.opt_get_default(SKIP_SHORT_NAME, 0) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(AppError::new(format!("{e}")));
+            }
+        };
+
+        let len: Option<usize> = match matches.opt_get(N_BYTES_SHORT_NAME) {
+            Ok(val) => val,
+            Err(e) => {
+                return Err(AppError::new(format!("{e}")));
+            }
+        };
+
+        Ok(Self { skip, len })
     }
 }

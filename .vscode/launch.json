@@ -38,7 +38,8 @@
                     "kind": "bin"
                 }
             },
-            "args": ["~/Documents/rustLearning/hello_macro/src/lib.rs", "/Users/arsynth/Documents/rustLearning/hello_macro/Cargo.toml"],
+            // "args": ["/bin/cat", "-s", "138208", "-a", "d"],
+            "args": ["/bin/cat", "-n", "10"],
             "cwd": "${workspaceFolder}"
         },
         {

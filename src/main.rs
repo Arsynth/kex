@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Read, Write, stdin}, path::Path,
+    io::{Read, Write, stdin, Seek}, path::Path, process::exit,
 };
 
 mod app;
@@ -17,31 +17,19 @@ fn main() {
 
     let AppConfig {input, mut output} = app_config;
 
-    match input {
-        Input::Files(files) => {
+    match input.content {
+        Content::Files(files) => {
             for path in files {
-                handle_file(&path, &mut output)
+                handle_file_path(&path, &mut output, input.range.clone())
             }
         }
-        Input::Stdin => handle_stdin(output),
+        Content::Stdin => handle_stdin(output, input.range),
     }
 }
 
-fn handle_stdin(output: impl Write) {
-    handle(stdin().lock(), output);
-}
+fn handle_stdin(mut output: impl Write, range: ContentRange) {
+    let mut input = stdin().lock();
 
-fn handle_file(path: &str, output: &mut impl Write) {
-    match File::open(Path::new(path)) {
-        Ok(file) => handle(file, output),
-        Err(err) => {
-            eprintln!("{path}: {err}");
-            return;
-        }
-    }
-}
-
-fn handle(mut input: impl Read, mut output: impl Write) {
     let mut buf = [0u8; 4096];
 
     while let Ok(size) = input.read(&mut buf) {
@@ -49,5 +37,54 @@ fn handle(mut input: impl Read, mut output: impl Write) {
             break;
         }
         assert!(output.write_all(&mut buf[..size]).is_ok());
+    }
+}
+
+fn handle_file_path(path: &str, output: &mut impl Write, range: ContentRange) {
+    use std::io::SeekFrom;
+
+    match File::open(Path::new(path)) {
+        Ok(mut file) => {
+            match file.seek(SeekFrom::Start(range.skip as u64)) {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("{e}");
+                    exit(1);
+                },
+            }
+            handle(&mut file, output, range.len)
+        },
+        Err(err) => {
+            eprintln!("{path}: {err}");
+            return;
+        }
+    }
+}
+
+fn handle(mut input: impl Read, mut output: impl Write, n_bytes: Option<usize>) {
+    use std::cmp::min;
+
+    let mut buf = [0u8; 4096];
+    
+    let mut elapsed = 0;
+    let mut to_read = buf.len();
+
+    while to_read != 0 {
+        if let Some(n_bytes) = n_bytes {
+            let diff = n_bytes - min(n_bytes, elapsed);
+            to_read = min(to_read, diff);
+        }
+
+        if let Ok(size) = input.read(&mut buf[..to_read]) {
+            if size == 0 {
+                break;
+            }
+            assert!(output.write_all(&mut buf[..size]).is_ok());
+
+            elapsed += to_read;
+        } else {
+            break;
+        }
+
     }
 }
