@@ -27,17 +27,9 @@ fn main() {
     }
 }
 
-fn handle_stdin(mut output: impl Write, range: ContentRange) {
-    let mut input = stdin().lock();
-
-    let mut buf = [0u8; 4096];
-
-    while let Ok(size) = input.read(&mut buf) {
-        if size == 0 {
-            break;
-        }
-        assert!(output.write_all(&mut buf[..size]).is_ok());
-    }
+fn handle_stdin(output: impl Write, range: ContentRange) {
+    let input = stdin().lock();
+    handle(input, output, range.len)
 }
 
 fn handle_file_path(path: &str, output: &mut impl Write, range: ContentRange) {
@@ -81,7 +73,7 @@ fn handle(mut input: impl Read, mut output: impl Write, n_bytes: Option<usize>) 
             }
             assert!(output.write_all(&mut buf[..size]).is_ok());
 
-            elapsed += to_read;
+            elapsed += size;
         } else {
             break;
         }

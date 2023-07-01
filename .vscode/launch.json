@@ -39,7 +39,8 @@
                 }
             },
             // "args": ["/bin/cat", "-s", "138208", "-a", "d"],
-            "args": ["/bin/cat", "-n", "10"],
+            // "args": ["/bin/cat", "-n", "10"],
+            "args": ["-n", "5"],
             "cwd": "${workspaceFolder}"
         },
         {
