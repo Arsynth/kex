@@ -18,13 +18,16 @@ Streamed hex dumping library.
 # Binary
 ## Short guide
 
-kex -a h8 -b h -g 8/2 file1 file2 file3 ...
+```shell
+# Example
+kex -a h8 -b h -g 8/2 -s 40 -n 10 file1 file2 file3 ...
+```
 
 Will print specified files sequentally as single stream. If no files specified, program will expect input from `stdin`
 
 ### Arguments
 
--a `<format>[min_width]` - the address format
+-a `<format>[min_width]` - the address format. `(Defaults to h8)`
 
 `<format>` - address representation. Accepts values:
 * h - hexadecimal
@@ -34,7 +37,7 @@ Will print specified files sequentally as single stream. If no files specified, 
 
 `<min_width>` - minimum width of displayed address. All, but decimal will be padded by zeros. Decimal padded with empty spaces
 
--b `<format>` - format of the bytes (second column)
+-b `<format>` - format of the raw data `(defaults to h)`
 
 `<format>` - byte representation. Accepts values:
 * h - hexadecimal
@@ -44,12 +47,16 @@ Will print specified files sequentally as single stream. If no files specified, 
 * c - ASCII characters. (Excludes characters/third column)
 * C - Caret notation + ASCII characters. (Excludes characters/third column)
 
--g `group_size[/number_of_groups]`
+-g `group_size[/number_of_groups]` `(defaults to 8/2)`
 
 or
 
 -g `bytes_per_row`
 
+
+-s `num_of_bytes_to_skip` `(defaults to 0)`
+
+-n `num_of_bytes_to_rear` `(if not specified, data will be read until EOF)`
 
 # Library
 
